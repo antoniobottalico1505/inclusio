@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Inclusio — Partner</title>
+  </head>
+  <body data-page="partner">
+    <header class="site-header">
+      <div class="shell nav-row">
+        <a class="brand" href="/">Inclusio</a>
+        <nav class="nav-links">
+          <a href="/">Home</a>
+          <a href="/pricing">Prezzi</a>
+          <a href="/waitlist">Lista d'attesa</a>
+          <a class="button button-primary button-sm" href="/app">Apri demo</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="section">
+      <div class="shell two-col-layout">
+        <section class="panel stack-md">
+          <div class="section-heading left">
+            <div class="eyebrow">B2B / B2Institution</div>
+            <h1>Qui c'è il margine serio</h1>
+            <p>
+              Università, coworking, community verticali, HR e scuole hanno budget, problema reale e bisogno di
+              onboarding migliore. Questa è la tua pagina commerciale più importante.
+            </p>
+          </div>
+
+          <form id="partner-form" class="form-card stack-sm">
+            <label>
+              <span>Nome</span>
+              <input type="text" name="name" required />
+            </label>
+            <label>
+              <span>Email professionale</span>
+              <input type="email" name="email" required />
+            </label>
+            <label>
+              <span>Organizzazione</span>
+              <input type="text" name="organization" required />
+            </label>
+            <label>
+              <span>Obiettivo principale</span>
+              <select name="goal">
+                <option value="student-life">Inclusione studenti</option>
+                <option value="community-engagement">Community engagement</option>
+                <option value="employee-belonging">Employee belonging</option>
+                <option value="onboarding">Onboarding nuovi ingressi</option>
+              </select>
+            </label>
+            <label>
+              <span>Contesto</span>
+              <textarea name="message" rows="6" placeholder="Descrivi il contesto, i problemi attuali e il numero di persone coinvolte"></textarea>
+            </label>
+            <button class="button button-primary" type="submit">Richiedi demo commerciale</button>
+          </form>
+        </section>
+
+        <aside class="panel stack-md">
+          <div class="section-heading left">
+            <div class="eyebrow">Perché vende</div>
+            <h2>Pacchetto partner consigliato</h2>
+          </div>
+          <ul class="check-list">
+            <li>dashboard inclusione e partecipazione</li>
+            <li>micro-gruppi consigliati per onboarding</li>
+            <li>toolkit per tutor, manager e community lead</li>
+            <li>report semplici per interventi rapidi</li>
+            <li>setup iniziale a pagamento o incluso nel primo mese</li>
+          </ul>
+        </aside>
+      </div>
+    </main>
+
+    <div id="toast" class="toast" aria-live="polite"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

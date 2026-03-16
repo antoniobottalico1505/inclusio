@@ -1,12 +1,47 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const nodemailer = require('nodemailer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const HOST = '0.0.0.0';
 const DB_PATH = path.join(__dirname, 'data', 'db.json');
 const SEED_PATH = path.join(__dirname, 'data', 'seed.json');
+const OWNER_EMAIL = process.env.OWNER_EMAIL || '';
+const GMAIL_USER = process.env.GMAIL_USER || '';
+const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || '';
+const APP_BASE_URL = process.env.APP_BASE_URL || '';
+
+const mailTransport =
+  GMAIL_USER && GMAIL_APP_PASSWORD
+    ? nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: GMAIL_USER,
+          pass: GMAIL_APP_PASSWORD
+        }
+      })
+    : null;
+
+async function sendEmail({ to, subject, html }) {
+  if (!mailTransport || !to) return;
+
+  await mailTransport.sendMail({
+    from: GMAIL_USER,
+    to,
+    subject,
+    html
+  });
+}
+
+async function safeSendEmail(payload) {
+  try {
+    await sendEmail(payload);
+  } catch (error) {
+    console.error('Email send failed:', error.message);
+  }
+}
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
@@ -475,8 +510,9 @@ app.post('/api/reports', (req, res) => {
   res.status(201).json({ report, summary: computeUserSummary(db, userId), insights: computeInsights(db) });
 });
 
-app.post('/api/waitlist', (req, res) => {
+app.post('/api/waitlist', async (req, res) => {
   const db = readDb();
+
   const nameValue = text(req.body.name, 60);
   const emailValue = email(req.body.email);
   const role = text(req.body.role, 40) || 'individual';
@@ -487,9 +523,13 @@ app.post('/api/waitlist', (req, res) => {
   }
 
   db.waitlist = db.waitlist || [];
+
   const existing = db.waitlist.find((item) => item.email === emailValue);
   if (existing) {
-    return res.json({ ok: true, message: 'Questa email è già presente nella lista d\'attesa.' });
+    return res.json({
+      ok: true,
+      message: "Questa email è già presente nella lista d'attesa."
+    });
   }
 
   db.waitlist.unshift({
@@ -500,12 +540,44 @@ app.post('/api/waitlist', (req, res) => {
     goal,
     createdAt: new Date().toISOString()
   });
+
   writeDb(db);
-  res.status(201).json({ ok: true, message: 'Iscrizione completata. Ti aggiorneremo presto.' });
+
+  await Promise.all([
+    safeSendEmail({
+      to: OWNER_EMAIL,
+      subject: `[Inclusio] Nuova iscrizione waitlist — ${nameValue}`,
+      html: `
+        <h2>Nuova iscrizione waitlist</h2>
+        <p><strong>Nome:</strong> ${nameValue}</p>
+        <p><strong>Email:</strong> ${emailValue}</p>
+        <p><strong>Ruolo:</strong> ${role}</p>
+        <p><strong>Goal:</strong> ${goal}</p>
+        <p><strong>Quando:</strong> ${new Date().toISOString()}</p>
+      `
+    }),
+    safeSendEmail({
+      to: emailValue,
+      subject: 'Inclusio — iscrizione confermata',
+      html: `
+        <h2>Sei dentro alla lista d'attesa</h2>
+        <p>Ciao ${nameValue},</p>
+        <p>abbiamo registrato la tua richiesta per Inclusio.</p>
+        <p>Ti aggiorneremo quando apriremo l'accesso o i percorsi Plus.</p>
+        <p><a href="${APP_BASE_URL || '#'}">Vai al sito</a></p>
+      `
+    })
+  ]);
+
+  return res.status(201).json({
+    ok: true,
+    message: 'Iscrizione completata. Ti aggiorneremo presto.'
+  });
 });
 
-app.post('/api/partner-leads', (req, res) => {
+app.post('/api/partner-leads', async (req, res) => {
   const db = readDb();
+
   const nameValue = text(req.body.name, 60);
   const emailValue = email(req.body.email);
   const organization = text(req.body.organization, 80);
@@ -526,8 +598,39 @@ app.post('/api/partner-leads', (req, res) => {
     message,
     createdAt: new Date().toISOString()
   });
+
   writeDb(db);
-  res.status(201).json({ ok: true, message: 'Richiesta demo ricevuta. Ti contatteremo con una proposta.' });
+
+  await Promise.all([
+    safeSendEmail({
+      to: OWNER_EMAIL,
+      subject: `[Inclusio] Nuovo lead partner — ${organization}`,
+      html: `
+        <h2>Nuovo lead partner</h2>
+        <p><strong>Nome:</strong> ${nameValue}</p>
+        <p><strong>Email:</strong> ${emailValue}</p>
+        <p><strong>Organizzazione:</strong> ${organization}</p>
+        <p><strong>Goal:</strong> ${goal}</p>
+        <p><strong>Messaggio:</strong><br/>${message || 'Nessun messaggio'}</p>
+      `
+    }),
+    safeSendEmail({
+      to: emailValue,
+      subject: 'Inclusio — richiesta demo ricevuta',
+      html: `
+        <h2>Richiesta demo ricevuta</h2>
+        <p>Ciao ${nameValue},</p>
+        <p>abbiamo ricevuto la tua richiesta per <strong>${organization}</strong>.</p>
+        <p>Ti ricontatteremo con una proposta demo.</p>
+        <p><a href="${APP_BASE_URL || '#'}">Vai al sito</a></p>
+      `
+    })
+  ]);
+
+  return res.status(201).json({
+    ok: true,
+    message: 'Richiesta demo ricevuta. Ti contatteremo con una proposta.'
+  });
 });
 
 app.get('/api/insights', (req, res) => {

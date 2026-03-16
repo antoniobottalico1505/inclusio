@@ -266,49 +266,77 @@
   ],
   "marketing": {
     "plans": [
-      {
-        "audience": "Per iniziare",
-        "name": "Solo",
-        "description": "Per chi vuole trovare un primo gruppo e testare il percorso con buddy e check-in di base.",
-        "price": "€0",
-        "period": "/mese",
-        "highlight": false,
-        "features": [
-          "accesso a gruppi aperti",
-          "1 buddy match consigliato",
-          "check-in personali",
-          "segnalazioni e supporto base"
-        ]
-      },
-      {
-        "audience": "Per uso personale",
-        "name": "Plus",
-        "description": "Per persone che vogliono continuità, percorsi curati e introduzioni sociali più guidate.",
-        "price": "€9",
-        "period": "/mese",
-        "highlight": true,
-        "features": [
-          "cerchi premium tematici",
-          "intro curate e slot prioritari",
-          "rituali di ingresso guidati",
-          "insight personali avanzati"
-        ]
-      },
-      {
-        "audience": "Per community e team",
-        "name": "Partner",
-        "description": "Per scuole, coworking, università, HR e community manager che vogliono strumenti di appartenenza.",
-        "price": "da €79",
-        "period": "/mese",
-        "highlight": false,
-        "features": [
-          "dashboard organizzativa",
-          "onboarding nuovi ingressi",
-          "report e segnali di chiusura",
-          "demo commerciale dedicata"
-        ]
-      }
-    ],
+  {
+    "audience": "Per iniziare",
+    "name": "Solo",
+    "description": "Per chi vuole provare Inclusio e trovare un primo gruppo senza impegno.",
+    "price": "€0",
+    "period": "/mese",
+    "highlight": false,
+    "features": [
+      "accesso base ai gruppi aperti",
+      "1 buddy match suggerito",
+      "check-in personali",
+      "supporto base"
+    ]
+  },
+  {
+    "audience": "Per uso personale",
+    "name": "Plus Mensile",
+    "description": "Per chi vuole continuità, introduzioni curate e percorsi sociali più guidati.",
+    "price": "€12,90",
+    "period": "/mese",
+    "highlight": true,
+    "features": [
+      "cerchi premium tematici",
+      "priorità negli ingressi",
+      "intro curate",
+      "insight personali avanzati"
+    ]
+  },
+  {
+    "audience": "Per uso personale",
+    "name": "Plus Annuale",
+    "description": "Versione annuale scontata per utenti che vogliono usare il prodotto con continuità.",
+    "price": "€119",
+    "period": "/anno",
+    "highlight": false,
+    "features": [
+      "tutto del Plus",
+      "prezzo ridotto rispetto al mensile",
+      "accesso continuativo",
+      "priorità su nuove funzioni"
+    ]
+  },
+  {
+    "audience": "Per scuole e università",
+    "name": "School Starter",
+    "description": "Per istituti che vogliono migliorare integrazione, appartenenza e onboarding sociale.",
+    "price": "da €1.990",
+    "period": "/anno",
+    "highlight": false,
+    "features": [
+      "dashboard istituto",
+      "onboarding nuovi ingressi",
+      "report base",
+      "supporto setup iniziale"
+    ]
+  },
+  {
+    "audience": "Per strutture più grandi",
+    "name": "School Pro",
+    "description": "Per campus, reti scolastiche e organizzazioni che vogliono strumenti più completi.",
+    "price": "da €3.990",
+    "period": "/anno",
+    "highlight": false,
+    "features": [
+      "tutto dello Starter",
+      "più sedi o più segmenti",
+      "report avanzati",
+      "supporto prioritario"
+    ]
+  }
+],
     "faqs": [
       {
         "q": "Inclusio può davvero risolvere la solitudine da solo?",

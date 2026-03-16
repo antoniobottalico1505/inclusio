@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Inclusio — Pagamento completato</title>
+  </head>
+  <body data-page="success">
+    <main class="section">
+      <div class="shell success-box">
+        <div class="eyebrow">Pagamento completato</div>
+        <h1>Perfetto. Ora puoi riportare l'utente nella demo o in onboarding.</h1>
+        <p>Configura questo URL come redirect finale nei Payment Link di Stripe.</p>
+        <div class="button-row">
+          <a class="button button-primary" href="/app">Apri demo</a>
+          <a class="button button-secondary" href="/pricing">Torna ai prezzi</a>
+        </div>
+      </div>
+    </main>
+    <div id="toast" class="toast" aria-live="polite"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

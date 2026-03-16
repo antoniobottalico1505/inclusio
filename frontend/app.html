@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Inclusio — Demo prodotto</title>
+  </head>
+  <body data-page="app">
+    <header class="site-header">
+      <div class="shell nav-row">
+        <a class="brand" href="/">Inclusio</a>
+        <nav class="nav-links">
+          <a href="/">Home</a>
+          <a href="/pricing">Prezzi</a>
+          <a href="/partner">Partner</a>
+          <button id="logout-btn" class="button button-ghost button-sm" type="button">Cambia profilo</button>
+        </nav>
+      </div>
+    </header>
+
+    <main class="section app-shell">
+      <div class="shell stack-lg">
+        <div class="section-heading left">
+          <div class="eyebrow">Demo funzionante</div>
+          <h1>Onboarding, buddy, gruppi, check-in e segnalazioni</h1>
+          <p>Questa parte resta separata dalla landing, così non confonde il percorso commerciale.</p>
+        </div>
+
+        <section class="metrics-strip">
+          <article class="metric-card">
+            <span>Gruppi attivi</span>
+            <strong id="metric-groups">—</strong>
+          </article>
+          <article class="metric-card">
+            <span>Inclusione media</span>
+            <strong id="metric-inclusion">—</strong>
+          </article>
+          <article class="metric-card">
+            <span>Buddy disponibili</span>
+            <strong id="metric-buddies">—</strong>
+          </article>
+        </section>
+
+        <div class="two-col-layout app-layout">
+          <section class="panel stack-md">
+            <div class="stack-sm">
+              <div class="eyebrow">Profili demo</div>
+              <div id="demo-personas" class="persona-list"></div>
+            </div>
+
+            <form id="onboarding-form" class="form-card stack-sm">
+              <h2>Crea il tuo spazio sociale</h2>
+              <label><span>Nome</span><input type="text" name="name" required /></label>
+              <label><span>Città</span><input type="text" name="city" /></label>
+              <label><span>Comfort sociale</span><input type="range" min="1" max="5" name="comfort" value="3" /></label>
+              <label><span>Energia sociale</span><input type="range" min="1" max="5" name="energy" value="3" /></label>
+              <label><span>Accessibilità / note utili</span><textarea name="accessibility" rows="4"></textarea></label>
+
+              <div class="stack-xs">
+                <span>Interessi (max 8)</span>
+                <div id="interest-options" class="chip-grid"></div>
+              </div>
+
+              <div class="stack-xs">
+                <span>Obiettivi</span>
+                <div class="chip-grid">
+                  <label class="chip-option"><input type="checkbox" name="goals" value="fare_amicizia" /><span>Fare amicizia</span></label>
+                  <label class="chip-option"><input type="checkbox" name="goals" value="trovare_gruppo" /><span>Trovare un gruppo</span></label>
+                  <label class="chip-option"><input type="checkbox" name="goals" value="uscire_di_piu" /><span>Uscire di più</span></label>
+                  <label class="chip-option"><input type="checkbox" name="goals" value="costruire_team" /><span>Costruire un team</span></label>
+                </div>
+              </div>
+
+              <button class="button button-primary" type="submit">Crea profilo</button>
+            </form>
+          </section>
+
+          <section id="personal-area" class="panel stack-md">
+            <div id="app-panel" class="hidden stack-lg">
+              <div class="section-heading left">
+                <div class="eyebrow">Area personale</div>
+                <h2 id="welcome-name">Bentornato</h2>
+              </div>
+
+              <section class="metrics-strip">
+                <article class="metric-card"><span>Belonging score</span><strong id="belonging-score">—</strong></article>
+                <article class="metric-card"><span>Gruppi attivi</span><strong id="joined-groups">—</strong></article>
+                <article class="metric-card"><span>Attività pianificate</span><strong id="planned-activities">—</strong></article>
+                <article class="metric-card"><span>Ansia recente</span><strong id="anxiety-average">—</strong></article>
+              </section>
+
+              <article class="entity-card">
+                <h3>Profilo</h3>
+                <div id="user-interests" class="tag-row"></div>
+                <p id="user-accessibility" class="muted"></p>
+              </article>
+
+              <article class="entity-card">
+                <h3>Prossimi passi suggeriti</h3>
+                <ul id="next-actions" class="reason-list"></ul>
+              </article>
+
+              <article class="entity-card">
+                <h3>Buddy match</h3>
+                <div id="buddy-content"></div>
+              </article>
+
+              <section class="metrics-strip">
+                <article class="metric-card"><span>Utenti attivi</span><strong id="insight-users">—</strong></article>
+                <article class="metric-card"><span>Inclusione media</span><strong id="insight-average-inclusion">—</strong></article>
+                <article class="metric-card"><span>Segnalazioni aperte</span><strong id="insight-open-reports">—</strong></article>
+                <article class="metric-card"><span>Waitlist</span><strong id="insight-waitlist">—</strong></article>
+              </section>
+
+              <article class="entity-card">
+                <h3>Gruppi consigliati</h3>
+                <div id="recommended-groups" class="stack-sm"></div>
+              </article>
+
+              <article class="entity-card">
+                <h3>I tuoi gruppi</h3>
+                <div id="my-groups" class="stack-sm"></div>
+              </article>
+
+              <div class="two-col-layout">
+                <form id="checkin-form" class="form-card stack-sm">
+                  <h3>Come stai nelle relazioni?</h3>
+                  <label><span>Inclusione</span><input type="range" min="1" max="5" name="included" value="3" /></label>
+                  <label><span>Energia</span><input type="range" min="1" max="5" name="energy" value="3" /></label>
+                  <label><span>Ansia sociale</span><input type="range" min="1" max="5" name="anxiety" value="3" /></label>
+                  <label><span>Nota facoltativa</span><textarea name="note" rows="4"></textarea></label>
+                  <button class="button button-primary" type="submit">Salva check-in</button>
+                </form>
+
+                <form id="report-form" class="form-card stack-sm">
+                  <h3>Esclusione o bullismo</h3>
+                  <label>
+                    <span>Categoria</span>
+                    <select name="category">
+                      <option value="esclusione">Esclusione</option>
+                      <option value="bullismo">Bullismo</option>
+                      <option value="gruppo_chiuso">Gruppo chiuso</option>
+                      <option value="altro">Altro</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>Gravità</span>
+                    <select name="severity">
+                      <option value="low">Bassa</option>
+                      <option value="medium">Media</option>
+                      <option value="high">Alta</option>
+                    </select>
+                  </label>
+                  <label><span>Descrizione</span><textarea name="details" rows="5"></textarea></label>
+                  <button class="button button-primary" type="submit">Invia segnalazione</button>
+                </form>
+              </div>
+
+              <div class="two-col-layout">
+                <article class="entity-card">
+                  <h3>Check-in recenti</h3>
+                  <div id="recent-checkins" class="stack-sm"></div>
+                </article>
+                <article class="entity-card">
+                  <h3>Segnalazioni recenti</h3>
+                  <div id="recent-reports" class="stack-sm"></div>
+                </article>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+
+    <div id="toast" class="toast" aria-live="polite"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

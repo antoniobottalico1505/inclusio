@@ -1,43 +1,83 @@
 import './styles.css';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+const page = document.body?.dataset?.page || 'landing';
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const STRIPE_LINKS = {
+  plusMonthly: import.meta.env.VITE_STRIPE_LINK_PLUS_MONTHLY || '',
+  plusYearly: import.meta.env.VITE_STRIPE_LINK_PLUS_YEARLY || '',
+  circleMonthly: import.meta.env.VITE_STRIPE_LINK_CIRCLE_MONTHLY || ''
+};
 
-async function apiGetJson(path) {
-  if (!API_BASE) {
-    throw new Error('Missing VITE_API_BASE_URL');
+const PLAN_CATALOG = [
+  {
+    key: 'solo',
+    audience: 'Accesso iniziale',
+    name: 'Solo',
+    price: '€0',
+    period: '/mese',
+    description: 'Per provare la logica del prodotto senza attrito commerciale.',
+    features: [
+      'accesso alla demo prodotto',
+      'gruppi aperti e onboarding base',
+      'check-in e segnalazioni',
+      'lista d\'attesa prioritaria per il lancio'
+    ],
+    ctaLabel: 'Apri la demo',
+    ctaHref: '/app'
+  },
+  {
+    key: 'plus-monthly',
+    audience: 'Uso personale',
+    name: 'Plus',
+    price: '€12,90',
+    period: '/mese',
+    description: 'Il piano B2C che può vendere davvero: basso attrito, chiaro, non tossico.',
+    features: [
+      'introduzioni sociali curate',
+      'slot prioritari nei cerchi guidati',
+      'match buddy potenziati',
+      'filtri comfort / ritmo sociale',
+      'percorsi suggeriti personalizzati'
+    ],
+    highlight: true,
+    ctaLabel: 'Attiva Plus',
+    ctaHref: STRIPE_LINKS.plusMonthly || '/waitlist'
+  },
+  {
+    key: 'plus-yearly',
+    audience: 'Uso personale annuale',
+    name: 'Plus Annual',
+    price: '€119',
+    period: '/anno',
+    description: 'Versione annuale con due mesi effettivamente scontati.',
+    features: [
+      'tutto di Plus',
+      'risparmio rispetto al mensile',
+      'migliore conversione cashflow',
+      'migliore retention di progetto'
+    ],
+    ctaLabel: 'Attiva Annuale',
+    ctaHref: STRIPE_LINKS.plusYearly || '/waitlist'
+  },
+  {
+    key: 'partner',
+    audience: 'Scuole, community, HR',
+    name: 'Partner',
+    price: 'da €149',
+    period: '/mese',
+    description: 'Qui sta il margine serio: team, scuole, coworking, università, onboarding.',
+    features: [
+      'dashboard organizzativa',
+      'leadership toolkit',
+      'micro-gruppi suggeriti',
+      'report di inclusione e rischio chiusura',
+      'setup commerciale assistito'
+    ],
+    ctaLabel: 'Richiedi demo',
+    ctaHref: '/partner'
   }
-
-  const attempts = [0, 1500, 3000, 5000];
-  let lastError = null;
-
-  for (const delay of attempts) {
-    if (delay > 0) {
-      await sleep(delay);
-    }
-
-    try {
-      const response = await fetch(`${API_BASE}${path}`, {
-        method: 'GET',
-        mode: 'cors',
-        cache: 'no-store',
-      });
-
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || `HTTP ${response.status}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      lastError = error;
-      console.error('GET failed:', path, error);
-    }
-  }
-
-  throw lastError || new Error('Failed to fetch');
-}
+];
 
 const state = {
   userId: localStorage.getItem('inclusio_user_id') || '',
@@ -46,21 +86,6 @@ const state = {
   insights: null,
   marketing: null,
   toastTimer: null
-};
-
-const ui = {
-  onboardingForm: document.getElementById('onboarding-form'),
-  checkinForm: document.getElementById('checkin-form'),
-  reportForm: document.getElementById('report-form'),
-  waitlistForm: document.getElementById('waitlist-form'),
-  partnerForm: document.getElementById('partner-form'),
-  interestOptions: document.getElementById('interest-options'),
-  appPanel: document.getElementById('app-panel'),
-  demoPersonas: document.getElementById('demo-personas'),
-  pricingCards: document.getElementById('pricing-cards'),
-  faqList: document.getElementById('faq-list'),
-  toast: document.getElementById('toast'),
-  logoutBtn: document.getElementById('logout-btn')
 };
 
 function escapeHtml(value = '') {
@@ -84,18 +109,30 @@ function collectChecked(name) {
   return Array.from(document.querySelectorAll(`input[name="${name}"]:checked`)).map((node) => node.value);
 }
 
+function setText(id, value) {
+  const node = document.getElementById(id);
+  if (node) node.textContent = value;
+}
+
 function showToast(message, tone = 'default') {
-  if (!ui.toast) return;
-  ui.toast.textContent = message;
-  ui.toast.style.background = tone === 'error' ? 'rgba(157, 46, 74, 0.95)' : 'rgba(24, 48, 65, 0.92)';
-  ui.toast.classList.add('show');
+  const toast = document.getElementById('toast');
+  if (!toast) return;
+  toast.textContent = message;
+  toast.className = `toast show ${tone === 'error' ? 'toast-error' : ''}`;
   if (state.toastTimer) clearTimeout(state.toastTimer);
-  state.toastTimer = setTimeout(() => ui.toast.classList.remove('show'), 2800);
+  state.toastTimer = setTimeout(() => toast.classList.remove('show'), 2800);
 }
 
 async function api(path, options = {}) {
+  if (!API_BASE) {
+    throw new Error('Configurazione mancante: VITE_API_BASE_URL');
+  }
+
   const response = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options.headers || {})
+    },
     ...options
   });
 
@@ -113,26 +150,11 @@ async function api(path, options = {}) {
   return payload;
 }
 
-function setText(id, value) {
-  const node = document.getElementById(id);
-  if (node) node.textContent = value;
-}
+function renderPlanCards(targetId, plans = PLAN_CATALOG) {
+  const node = document.getElementById(targetId);
+  if (!node) return;
 
-function renderInterestOptions(interests) {
-  ui.interestOptions.innerHTML = interests
-    .map(
-      (interest) => `
-        <label class="pill-option">
-          <input type="checkbox" name="interests" value="${escapeHtml(interest)}" />
-          ${escapeHtml(interest)}
-        </label>
-      `
-    )
-    .join('');
-}
-
-function renderPricing(plans = []) {
-  ui.pricingCards.innerHTML = plans
+  node.innerHTML = plans
     .map(
       (plan) => `
         <article class="pricing-card ${plan.highlight ? 'highlight' : ''}">
@@ -146,30 +168,68 @@ function renderPricing(plans = []) {
           <ul class="check-list">
             ${plan.features.map((feature) => `<li>${escapeHtml(feature)}</li>`).join('')}
           </ul>
+          <a class="button ${plan.highlight ? 'button-primary' : 'button-secondary'}" href="${escapeHtml(plan.ctaHref)}" ${/^https?:/i.test(plan.ctaHref) ? 'target="_blank" rel="noreferrer"' : ''}>${escapeHtml(plan.ctaLabel)}</a>
         </article>
       `
     )
     .join('');
 }
 
-function renderFaqs(faqs = []) {
-  ui.faqList.innerHTML = faqs
+function renderValueCards() {
+  const node = document.getElementById('value-points');
+  if (!node) return;
+
+  const items = [
+    {
+      title: 'Acquisizione',
+      text: 'Landing separata, pricing separato, waitlist separata: meno confusione, più conversione.'
+    },
+    {
+      title: 'Monetizzazione',
+      text: 'Free per entrare, Plus per utenti, Partner per margine vero. Niente dark pattern.'
+    },
+    {
+      title: 'Prodotto',
+      text: 'La demo resta viva in una pagina dedicata, senza sporcare la parte commerciale.'
+    }
+  ];
+
+  node.innerHTML = items
     .map(
       (item) => `
-        <article class="faq-item">
-          <h3>${escapeHtml(item.q)}</h3>
-          <p>${escapeHtml(item.a)}</p>
+        <article class="feature-card">
+          <h3>${escapeHtml(item.title)}</h3>
+          <p>${escapeHtml(item.text)}</p>
         </article>
+      `
+    )
+    .join('');
+}
+
+function renderInterestOptions(interests) {
+  const node = document.getElementById('interest-options');
+  if (!node) return;
+
+  node.innerHTML = interests
+    .map(
+      (interest) => `
+        <label class="chip-option">
+          <input type="checkbox" name="interests" value="${escapeHtml(interest)}" />
+          <span>${escapeHtml(interest)}</span>
+        </label>
       `
     )
     .join('');
 }
 
 function renderDemoPersonas(users = []) {
-  ui.demoPersonas.innerHTML = users
+  const node = document.getElementById('demo-personas');
+  if (!node) return;
+
+  node.innerHTML = users
     .map(
       (user) => `
-        <button class="persona-chip ${state.userId === user.id ? 'active' : ''}" data-demo-user="${user.id}">
+        <button type="button" class="persona-pill" data-demo-user="${escapeHtml(user.id)}">
           ${escapeHtml(user.name)} · ${escapeHtml(user.city)}
         </button>
       `
@@ -190,22 +250,22 @@ function renderBuddy() {
   if (!container) return;
 
   if (!buddy) {
-    container.innerHTML = '<div class="buddy-card"><p class="support-text">Nessuna persona ponte disponibile ora.</p></div>';
+    container.innerHTML = '<p class="muted">Nessuna persona ponte disponibile in questo momento.</p>';
     return;
   }
 
   container.innerHTML = `
-    <article class="buddy-card">
+    <div class="stack-xs">
       <div class="meta-row">
-        <span class="meta-pill">${escapeHtml(buddy.city || 'Online')}</span>
-        <span class="meta-pill">${buddy.mentor ? 'Mentor' : 'Peer'}</span>
+        <span>${escapeHtml(buddy.city || 'Online')}</span>
+        <span>${buddy.mentor ? 'Mentor' : 'Peer'}</span>
       </div>
       <h4>${escapeHtml(buddy.name)}</h4>
       <p>${escapeHtml(buddy.note || 'Compatibilità alta con il tuo profilo.')}</p>
-      <div class="chips">
-        ${(buddy.sharedInterests || []).map((item) => `<span class="chip">${escapeHtml(item)}</span>`).join('') || '<span class="chip">Compatibilità generale</span>'}
+      <div class="tag-row">
+        ${(buddy.sharedInterests || []).map((item) => `<span class="tag">${escapeHtml(item)}</span>`).join('') || '<span class="tag">Compatibilità generale</span>'}
       </div>
-    </article>
+    </div>
   `;
 }
 
@@ -213,6 +273,7 @@ function renderActionPlan() {
   const list = document.getElementById('next-actions');
   const actions = state.summary?.actionPlan || [];
   if (!list) return;
+
   list.innerHTML = actions.map((item) => `<li>${escapeHtml(item)}</li>`).join('');
 }
 
@@ -222,30 +283,24 @@ function renderRecommendedGroups() {
   if (!container) return;
 
   if (!groups.length) {
-    container.innerHTML = '<article class="group-card"><p class="support-text">Nessun gruppo consigliato disponibile in questo momento.</p></article>';
+    container.innerHTML = '<p class="muted">Nessun gruppo consigliato disponibile in questo momento.</p>';
     return;
   }
 
   container.innerHTML = groups
     .map(
       (group) => `
-        <article class="group-card">
+        <article class="entity-card">
           <div class="meta-row">
-            <span class="meta-pill">${escapeHtml(group.city)}</span>
-            <span class="meta-pill">Match ${group.matchScore}</span>
-            <span class="meta-pill">Posti liberi ${group.spotsLeft}</span>
+            <span>${escapeHtml(group.city)}</span>
+            <span>Match ${escapeHtml(group.matchScore)}</span>
+            <span>Posti liberi ${escapeHtml(group.spotsLeft)}</span>
           </div>
           <h4>${escapeHtml(group.name)}</h4>
           <p>${escapeHtml(group.description)}</p>
-          <div class="chips">
-            ${group.tags.map((tag) => `<span class="chip">${escapeHtml(tag)}</span>`).join('')}
-          </div>
-          <div class="meta-row">
-            ${(group.matchReasons || []).map((reason) => `<span class="meta-pill">${escapeHtml(reason)}</span>`).join('')}
-          </div>
-          <div class="group-actions">
-            <button class="primary-btn" data-action="join-group" data-group-id="${group.id}">Entra nel gruppo</button>
-          </div>
+          <div class="tag-row">${group.tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}</div>
+          <ul class="reason-list">${(group.matchReasons || []).map((reason) => `<li>${escapeHtml(reason)}</li>`).join('')}</ul>
+          <button class="button button-primary" data-action="join-group" data-group-id="${escapeHtml(group.id)}">Entra nel gruppo</button>
         </article>
       `
     )
@@ -258,49 +313,43 @@ function renderMyGroups() {
   if (!container) return;
 
   if (!groups.length) {
-    container.innerHTML = '<article class="group-card"><p class="support-text">Non hai ancora gruppi attivi. Parti da un cerchio consigliato.</p></article>';
+    container.innerHTML = '<p class="muted">Non hai ancora gruppi attivi. Parti da un cerchio consigliato.</p>';
     return;
   }
 
   container.innerHTML = groups
     .map(
       (group) => `
-        <article class="group-card">
+        <article class="entity-card">
           <div class="meta-row">
-            <span class="meta-pill">${escapeHtml(group.city)}</span>
-            <span class="meta-pill">${group.memberCount}/${group.sizeLimit} membri</span>
-            <span class="meta-pill">Comfort ${group.targetComfort}/5</span>
+            <span>${escapeHtml(group.city)}</span>
+            <span>${escapeHtml(group.memberCount)}/${escapeHtml(group.sizeLimit)} membri</span>
+            <span>Comfort ${escapeHtml(group.targetComfort)}/5</span>
           </div>
           <h4>${escapeHtml(group.name)}</h4>
           <p>${escapeHtml(group.description)}</p>
-          <div class="chips">
-            ${group.tags.map((tag) => `<span class="chip">${escapeHtml(tag)}</span>`).join('')}
-          </div>
-          <div class="activity-list">
+          <div class="tag-row">${group.tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}</div>
+          <div class="stack-sm">
             ${group.activities
               .map(
                 (activity) => `
-                  <div class="activity-block">
-                    <strong>${escapeHtml(activity.title)}</strong>
-                    <div class="activity-row timeline-meta">
-                      <span class="meta-pill">${escapeHtml(activity.when)}</span>
-                      <span class="meta-pill">${escapeHtml(activity.mode)}</span>
-                      <span class="meta-pill">RSVP ${activity.rsvps.length}</span>
+                  <div class="activity-card">
+                    <div class="meta-row">
+                      <span>${escapeHtml(activity.when)}</span>
+                      <span>${escapeHtml(activity.mode)}</span>
+                      <span>RSVP ${escapeHtml(activity.rsvps.length)}</span>
                     </div>
+                    <h5>${escapeHtml(activity.title)}</h5>
                     <p>${escapeHtml(activity.description)}</p>
-                    <div class="inline-actions">
-                      <button class="secondary-btn" data-action="toggle-rsvp" data-group-id="${group.id}" data-activity-id="${activity.id}">
-                        ${activity.rsvps.includes(state.userId) ? 'Annulla partecipazione' : 'Partecipo'}
-                      </button>
-                    </div>
+                    <button class="button button-secondary" data-action="toggle-rsvp" data-group-id="${escapeHtml(group.id)}" data-activity-id="${escapeHtml(activity.id)}">
+                      ${activity.rsvps.includes(state.userId) ? 'Annulla partecipazione' : 'Partecipo'}
+                    </button>
                   </div>
                 `
               )
               .join('')}
           </div>
-          <div class="group-actions">
-            <button class="ghost-btn" data-action="leave-group" data-group-id="${group.id}">Esci dal gruppo</button>
-          </div>
+          <button class="button button-ghost" data-action="leave-group" data-group-id="${escapeHtml(group.id)}">Esci dal gruppo</button>
         </article>
       `
     )
@@ -313,7 +362,7 @@ function renderCheckins() {
   if (!container) return;
 
   if (!checkins.length) {
-    container.innerHTML = '<article class="timeline-item"><p class="support-text">Nessun check-in registrato finora.</p></article>';
+    container.innerHTML = '<p class="muted">Nessun check-in registrato finora.</p>';
     return;
   }
 
@@ -321,13 +370,12 @@ function renderCheckins() {
     .slice(0, 5)
     .map(
       (item) => `
-        <article class="timeline-item">
+        <article class="log-card">
           <div class="meta-row">
-            <span class="meta-pill">${formatDate(item.createdAt)}</span>
-            <span class="meta-pill">Inclusione ${item.included}/5</span>
-            <span class="meta-pill">Ansia ${item.anxiety}/5</span>
+            <span>${escapeHtml(formatDate(item.createdAt))}</span>
+            <span>Inclusione ${escapeHtml(item.included)}/5</span>
+            <span>Ansia ${escapeHtml(item.anxiety)}/5</span>
           </div>
-          <strong>Momento registrato</strong>
           <p>${escapeHtml(item.note || 'Nessuna nota aggiuntiva.')}</p>
         </article>
       `
@@ -341,7 +389,7 @@ function renderReports() {
   if (!container) return;
 
   if (!reports.length) {
-    container.innerHTML = '<article class="timeline-item"><p class="support-text">Nessuna segnalazione aperta.</p></article>';
+    container.innerHTML = '<p class="muted">Nessuna segnalazione aperta.</p>';
     return;
   }
 
@@ -349,11 +397,11 @@ function renderReports() {
     .slice(0, 5)
     .map(
       (report) => `
-        <article class="timeline-item">
+        <article class="log-card">
           <div class="meta-row">
-            <span class="meta-pill">${escapeHtml(report.category)}</span>
-            <span class="meta-pill">${escapeHtml(report.severity)}</span>
-            <span class="meta-pill">${formatDate(report.createdAt)}</span>
+            <span>${escapeHtml(report.category)}</span>
+            <span>${escapeHtml(report.severity)}</span>
+            <span>${escapeHtml(formatDate(report.createdAt))}</span>
           </div>
           <strong>Stato: ${escapeHtml(report.statusLabel || report.status)}</strong>
           <p>${escapeHtml(report.details || 'Nessun dettaglio disponibile.')}</p>
@@ -364,13 +412,16 @@ function renderReports() {
 }
 
 function renderSummary() {
+  const panel = document.getElementById('app-panel');
   const summary = state.summary;
+  if (!panel) return;
+
   if (!summary) {
-    ui.appPanel.classList.add('hidden');
+    panel.classList.add('hidden');
     return;
   }
 
-  ui.appPanel.classList.remove('hidden');
+  panel.classList.remove('hidden');
   setText('welcome-name', `Ciao ${summary.user.name}`);
   setText('belonging-score', String(summary.stats.belongingScore));
   setText('joined-groups', String(summary.stats.joinedGroups));
@@ -383,8 +434,9 @@ function renderSummary() {
 
   const interestsNode = document.getElementById('user-interests');
   if (interestsNode) {
-    interestsNode.innerHTML = summary.user.interests.map((item) => `<span class="chip">${escapeHtml(item)}</span>`).join('');
+    interestsNode.innerHTML = summary.user.interests.map((item) => `<span class="tag">${escapeHtml(item)}</span>`).join('');
   }
+
   const accessibilityNode = document.getElementById('user-accessibility');
   if (accessibilityNode) {
     accessibilityNode.textContent = summary.user.accessibility || 'Nessuna preferenza dichiarata.';
@@ -406,11 +458,8 @@ async function refreshBootstrap() {
   state.insights = payload.insights || null;
   state.summary = payload.summary || null;
   state.marketing = payload.marketing || null;
-
   renderInterestOptions(state.interests);
   renderTopMetrics();
-  renderPricing(payload.marketing?.plans || []);
-  renderFaqs(payload.marketing?.faqs || []);
   renderDemoPersonas(payload.marketing?.demoUsers || []);
   renderSummary();
 }
@@ -421,10 +470,7 @@ async function loadUser(userId) {
     state.userId = userId;
     localStorage.setItem('inclusio_user_id', userId);
     state.summary = summary;
-
-    const insights = await api('/api/insights');
-    state.insights = insights;
-
+    state.insights = await api('/api/insights');
     renderTopMetrics();
     renderSummary();
   } catch (error) {
@@ -432,7 +478,6 @@ async function loadUser(userId) {
       state.userId = '';
       state.summary = null;
       localStorage.removeItem('inclusio_user_id');
-
       await refreshBootstrap();
       renderSummary();
       showToast('Il profilo salvato non esiste più. Selezionane o creane uno nuovo.');
@@ -447,6 +492,7 @@ async function handleOnboarding(event) {
   event.preventDefault();
   const form = event.currentTarget;
   const interests = collectChecked('interests').slice(0, 8);
+
   if (!interests.length) {
     showToast('Seleziona almeno un interesse.', 'error');
     return;
@@ -474,7 +520,7 @@ async function handleOnboarding(event) {
     renderSummary();
     showToast('Profilo creato. Ora puoi esplorare buddy, gruppi e attività.');
     await refreshBootstrap();
-    document.getElementById('platform')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.getElementById('personal-area')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (error) {
     showToast(error.message, 'error');
   }
@@ -488,6 +534,7 @@ async function handleCheckin(event) {
   }
 
   const form = event.currentTarget;
+
   try {
     const payload = await api('/api/checkins', {
       method: 'POST',
@@ -499,6 +546,7 @@ async function handleCheckin(event) {
         note: form.note.value.trim()
       })
     });
+
     state.summary = payload.summary;
     state.insights = payload.insights;
     renderTopMetrics();
@@ -518,6 +566,7 @@ async function handleReport(event) {
   }
 
   const form = event.currentTarget;
+
   try {
     const payload = await api('/api/reports', {
       method: 'POST',
@@ -528,6 +577,7 @@ async function handleReport(event) {
         details: form.details.value.trim()
       })
     });
+
     state.summary = payload.summary;
     state.insights = payload.insights;
     renderTopMetrics();
@@ -542,6 +592,7 @@ async function handleReport(event) {
 async function handleWaitlist(event) {
   event.preventDefault();
   const form = event.currentTarget;
+
   try {
     const payload = await api('/api/waitlist', {
       method: 'POST',
@@ -552,11 +603,9 @@ async function handleWaitlist(event) {
         goal: form.goal.value
       })
     });
+
     form.reset();
     showToast(payload.message || 'Iscrizione confermata.');
-    state.insights = await api('/api/insights');
-    renderTopMetrics();
-    renderSummary();
   } catch (error) {
     showToast(error.message, 'error');
   }
@@ -565,6 +614,7 @@ async function handleWaitlist(event) {
 async function handlePartnerLead(event) {
   event.preventDefault();
   const form = event.currentTarget;
+
   try {
     const payload = await api('/api/partner-leads', {
       method: 'POST',
@@ -576,11 +626,9 @@ async function handlePartnerLead(event) {
         message: form.message.value.trim()
       })
     });
+
     form.reset();
     showToast(payload.message || 'Richiesta ricevuta.');
-    state.insights = await api('/api/insights');
-    renderTopMetrics();
-    renderSummary();
   } catch (error) {
     showToast(error.message, 'error');
   }
@@ -589,12 +637,14 @@ async function handlePartnerLead(event) {
 async function handleActionClick(event) {
   const button = event.target.closest('[data-action]');
   if (!button || !state.userId) return;
+
   const action = button.dataset.action;
   const groupId = button.dataset.groupId;
   const activityId = button.dataset.activityId;
 
   try {
     let payload = null;
+
     if (action === 'join-group') {
       payload = await api(`/api/groups/${encodeURIComponent(groupId)}/join`, {
         method: 'POST',
@@ -615,8 +665,7 @@ async function handleActionClick(event) {
     if (payload?.summary) {
       state.summary = payload.summary;
       showToast(payload.message || 'Operazione completata.');
-      const insights = await api('/api/insights');
-      state.insights = insights;
+      state.insights = await api('/api/insights');
       renderTopMetrics();
       renderSummary();
     }
@@ -640,31 +689,64 @@ function handleLogout() {
   showToast('Profilo deselezionato.');
 }
 
-async function bootstrap() {
-  ui.onboardingForm?.addEventListener('submit', handleOnboarding);
-  ui.checkinForm?.addEventListener('submit', handleCheckin);
-  ui.reportForm?.addEventListener('submit', handleReport);
-  ui.waitlistForm?.addEventListener('submit', handleWaitlist);
-  ui.partnerForm?.addEventListener('submit', handlePartnerLead);
-  ui.demoPersonas?.addEventListener('click', handlePersonaClick);
-  ui.appPanel?.addEventListener('click', handleActionClick);
-  ui.logoutBtn?.addEventListener('click', handleLogout);
+function bootstrapLanding() {
+  renderPlanCards('featured-plans', PLAN_CATALOG.slice(0, 3));
+  renderValueCards();
+}
+
+function bootstrapPricing() {
+  renderPlanCards('pricing-plans', PLAN_CATALOG);
+}
+
+function bootstrapWaitlistPage() {
+  renderPlanCards('mini-pricing', PLAN_CATALOG.slice(0, 2));
+  document.getElementById('waitlist-form')?.addEventListener('submit', handleWaitlist);
+}
+
+function bootstrapPartnerPage() {
+  document.getElementById('partner-form')?.addEventListener('submit', handlePartnerLead);
+}
+
+async function bootstrapAppPage() {
+  document.getElementById('onboarding-form')?.addEventListener('submit', handleOnboarding);
+  document.getElementById('checkin-form')?.addEventListener('submit', handleCheckin);
+  document.getElementById('report-form')?.addEventListener('submit', handleReport);
+  document.getElementById('demo-personas')?.addEventListener('click', handlePersonaClick);
+  document.getElementById('app-panel')?.addEventListener('click', handleActionClick);
+  document.getElementById('logout-btn')?.addEventListener('click', handleLogout);
 
   try {
     await refreshBootstrap();
     if (state.userId && !state.summary) {
       await loadUser(state.userId);
     }
-} catch (error) {
-  console.error('Bootstrap error:', error, 'API_BASE=', API_BASE);
-
-  showToast(
-    API_BASE
-      ? `Connessione al backend non riuscita: ${error?.message || 'Failed to fetch'}`
-      : 'Configurazione mancante: VITE_API_BASE_URL',
-    'error'
-  );
+  } catch (error) {
+    console.error('Bootstrap error:', error, 'API_BASE=', API_BASE);
+    showToast(
+      API_BASE ? `Connessione al backend non riuscita: ${error?.message || 'Failed to fetch'}` : 'Configurazione mancante: VITE_API_BASE_URL',
+      'error'
+    );
+  }
 }
+
+function bootstrapStaticPage() {
+  renderPlanCards('pricing-inline', PLAN_CATALOG.slice(0, 3));
+}
+
+async function bootstrap() {
+  if (page === 'landing') {
+    bootstrapLanding();
+  } else if (page === 'pricing') {
+    bootstrapPricing();
+  } else if (page === 'waitlist') {
+    bootstrapWaitlistPage();
+  } else if (page === 'partner') {
+    bootstrapPartnerPage();
+  } else if (page === 'app') {
+    await bootstrapAppPage();
+  } else {
+    bootstrapStaticPage();
+  }
 }
 
 bootstrap();

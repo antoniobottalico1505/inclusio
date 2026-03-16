@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Inclusio — Lista d'attesa</title>
+  </head>
+  <body data-page="waitlist">
+    <header class="site-header">
+      <div class="shell nav-row">
+        <a class="brand" href="/">Inclusio</a>
+        <nav class="nav-links">
+          <a href="/">Home</a>
+          <a href="/pricing">Prezzi</a>
+          <a href="/partner">Partner</a>
+          <a class="button button-primary button-sm" href="/app">Apri demo</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="section">
+      <div class="shell two-col-layout">
+        <section class="panel stack-md">
+          <div class="section-heading left">
+            <div class="eyebrow">Accesso anticipato</div>
+            <h1>Raccogli email subito</h1>
+            <p>
+              Questa pagina serve a convertire traffico freddo in contatti proprietari e segmentarli per obiettivo.
+            </p>
+          </div>
+
+          <form id="waitlist-form" class="form-card stack-sm">
+            <label>
+              <span>Nome</span>
+              <input type="text" name="name" required />
+            </label>
+            <label>
+              <span>Email</span>
+              <input type="email" name="email" required />
+            </label>
+            <label>
+              <span>Chi sei?</span>
+              <select name="role">
+                <option value="individual">Persona singola</option>
+                <option value="student">Studente</option>
+                <option value="creator">Community builder</option>
+                <option value="manager">HR / manager</option>
+              </select>
+            </label>
+            <label>
+              <span>Cosa cerchi?</span>
+              <select name="goal">
+                <option value="friendship">Nuove amicizie</option>
+                <option value="groups">Entrare in gruppi già avviati</option>
+                <option value="events">Eventi piccoli e guidati</option>
+                <option value="belonging-tools">Strumenti di appartenenza per team/community</option>
+              </select>
+            </label>
+            <button class="button button-primary" type="submit">Iscrivimi</button>
+          </form>
+        </section>
+
+        <aside class="stack-md">
+          <div class="section-heading left">
+            <div class="eyebrow">Offerta</div>
+            <h2>Prima l'email, poi la vendita</h2>
+          </div>
+          <div id="mini-pricing" class="pricing-grid compact-pricing"></div>
+        </aside>
+      </div>
+    </main>
+
+    <div id="toast" class="toast" aria-live="polite"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
