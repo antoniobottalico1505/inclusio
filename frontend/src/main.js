@@ -606,7 +606,13 @@ async function bootstrap() {
       await loadUser(state.userId);
     }
   } catch (error) {
-    showToast('Impossibile collegarsi al backend. Controlla URL e deploy.', 'error');
+    console.error('Bootstrap error:', error, 'API_BASE=', API_BASE);
+    showToast(
+      API_BASE
+        ? 'Impossibile collegarsi al backend. Controlla CORS, URL e deploy.'
+        : 'Configurazione mancante su Vercel: VITE_API_BASE_URL.',
+      'error'
+    );
   }
 }
 
