@@ -266,93 +266,93 @@
   ],
   "marketing": {
     "plans": [
-  {
-    "audience": "Per iniziare",
-    "name": "Solo",
-    "description": "Per chi vuole provare Inclusio e trovare un primo gruppo senza impegno.",
-    "price": "€0",
-    "period": "/mese",
-    "highlight": false,
-    "features": [
-      "accesso base ai gruppi aperti",
-      "1 buddy match suggerito",
-      "check-in personali",
-      "supporto base"
-    ]
-  },
-  {
-    "audience": "Per uso personale",
-    "name": "Plus Mensile",
-    "description": "Per chi vuole continuità, introduzioni curate e percorsi sociali più guidati.",
-    "price": "€12,90",
-    "period": "/mese",
-    "highlight": true,
-    "features": [
-      "cerchi premium tematici",
-      "priorità negli ingressi",
-      "intro curate",
-      "insight personali avanzati"
-    ]
-  },
-  {
-    "audience": "Per uso personale",
-    "name": "Plus Annuale",
-    "description": "Versione annuale scontata per utenti che vogliono usare il prodotto con continuità.",
-    "price": "€119",
-    "period": "/anno",
-    "highlight": false,
-    "features": [
-      "tutto del Plus",
-      "prezzo ridotto rispetto al mensile",
-      "accesso continuativo",
-      "priorità su nuove funzioni"
-    ]
-  },
-  {
-    "audience": "Per scuole e università",
-    "name": "School Starter",
-    "description": "Per istituti che vogliono migliorare integrazione, appartenenza e onboarding sociale.",
-    "price": "da €1.990",
-    "period": "/anno",
-    "highlight": false,
-    "features": [
-      "dashboard istituto",
-      "onboarding nuovi ingressi",
-      "report base",
-      "supporto setup iniziale"
-    ]
-  },
-  {
-    "audience": "Per strutture più grandi",
-    "name": "School Pro",
-    "description": "Per campus, reti scolastiche e organizzazioni che vogliono strumenti più completi.",
-    "price": "da €3.990",
-    "period": "/anno",
-    "highlight": false,
-    "features": [
-      "tutto dello Starter",
-      "più sedi o più segmenti",
-      "report avanzati",
-      "supporto prioritario"
-    ]
-  }
-],
+      {
+        "audience": "Per iniziare",
+        "name": "Solo",
+        "description": "Per chi vuole provare Inclusio e trovare un primo gruppo senza impegno.",
+        "price": "€0",
+        "period": "/mese",
+        "highlight": false,
+        "features": [
+          "accesso base ai gruppi aperti",
+          "1 buddy match suggerito",
+          "check-in personali",
+          "supporto base"
+        ]
+      },
+      {
+        "audience": "Per uso personale",
+        "name": "Plus Mensile",
+        "description": "Per chi vuole continuità, introduzioni curate e percorsi sociali più guidati.",
+        "price": "€12,90",
+        "period": "/mese",
+        "highlight": true,
+        "features": [
+          "cerchi premium tematici",
+          "priorità negli ingressi",
+          "intro curate",
+          "insight personali avanzati"
+        ]
+      },
+      {
+        "audience": "Per uso personale",
+        "name": "Plus Annuale",
+        "description": "Versione annuale scontata per utenti che vogliono usare il prodotto con continuità.",
+        "price": "€119",
+        "period": "/anno",
+        "highlight": false,
+        "features": [
+          "tutto del Plus",
+          "prezzo ridotto rispetto al mensile",
+          "accesso continuativo",
+          "priorità su nuove funzioni"
+        ]
+      },
+      {
+        "audience": "Per scuole e università",
+        "name": "School Starter",
+        "description": "Per istituti che vogliono migliorare integrazione, appartenenza e onboarding sociale.",
+        "price": "da €1.990",
+        "period": "/anno",
+        "highlight": false,
+        "features": [
+          "dashboard istituto",
+          "onboarding nuovi ingressi",
+          "report base",
+          "supporto setup iniziale"
+        ]
+      },
+      {
+        "audience": "Per strutture più grandi",
+        "name": "School Pro",
+        "description": "Per campus, reti scolastiche e organizzazioni che vogliono strumenti più completi.",
+        "price": "da €3.990",
+        "period": "/anno",
+        "highlight": false,
+        "features": [
+          "tutto dello Starter",
+          "più sedi o più segmenti",
+          "report avanzati",
+          "supporto prioritario"
+        ]
+      }
+    ],
     "faqs": [
       {
-        "q": "Inclusio può davvero risolvere la solitudine da solo?",
-        "a": "No. Un prodotto del genere può ridurre attrito, isolamento e esclusione, ma non sostituisce relazioni reali, supporto professionale o politiche di comunità ben fatte."
+        "q": "Inclusio può davvero aiutare contro l'isolamento?",
+        "a": "Può ridurre attrito, imbarazzo iniziale e senso di esclusione, ma non sostituisce relazioni reali o supporto professionale quando serve."
       },
       {
         "q": "Perché evitare metriche sociali pubbliche?",
-        "a": "Perché follower, classifiche e like aggravano spesso confronto e senso di esclusione. Qui il focus è sulla qualità della connessione, non sulla popolarità."
+        "a": "Perché follower, classifiche e like spesso aggravano confronto e insicurezza. Qui conta la qualità della connessione, non la popolarità."
       },
       {
-        "q": "Come si monetizza senza diventare tossico?",
-        "a": "Con freemium sobrio, upgrade premium utili e piani B2B per organizzazioni che vogliono strumenti di inclusione. Non con dinamiche che premiano lo status."
+        "q": "Come si monetizza senza rendere il prodotto tossico?",
+        "a": "Con freemium sobrio, upgrade premium utili e piani B2B per scuole e organizzazioni. Non con meccaniche che premiano lo status."
       },
       {
         "q": "È pensato solo per persone fragili?",
-        "a": "No. È progettato per chiunque voglia entrare meglio nei gruppi, costruire comunità più aperte o migliorare il belonging in contesti reali."
+        "a": "No. È pensato per chi vuole entrare meglio nei gruppi, sentirsi più incluso e costruire comunità più aperte."
       }
     ]
   }

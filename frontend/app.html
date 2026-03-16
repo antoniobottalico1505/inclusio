@@ -1,44 +1,44 @@
 <!doctype html>
 <html lang="it">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Inclusio — Demo prodotto</title>
-  </head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/svg+xml" href="/logo-square.svg" />
+  <meta name="theme-color" content="#15364D" />
+  <meta property="og:image" content="/logo-square.svg" />
+  <title>Inclusio — Demo prodotto</title>
+  <meta name="description" content="Esplora la demo di Inclusio: onboarding, gruppi, buddy, check-in e segnalazioni." />
+</head>
   <body data-page="app">
     <header class="site-header">
       <div class="shell nav-row">
-        <a class="brand" href="/">Inclusio</a>
+        <a class="brand" href="/">
+          <img class="brand-logo" src="/logo-square.svg" alt="Logo Inclusio" />
+          <span>Inclusio</span>
+        </a>
         <nav class="nav-links">
           <a href="/">Home</a>
           <a href="/pricing">Prezzi</a>
-          <a href="/partner">Partner</a>
-          <button id="logout-btn" class="button button-ghost button-sm" type="button">Cambia profilo</button>
+          <a href="/schools">Scuole</a>
+          <a href="/waitlist">Lista d'attesa</a>
+          <a class="button button-primary button-sm" href="/app">Apri demo</a>
         </nav>
       </div>
     </header>
 
+
     <main class="section app-shell">
       <div class="shell stack-lg">
         <div class="section-heading left">
-          <div class="eyebrow">Demo funzionante</div>
-          <h1>Onboarding, buddy, gruppi, check-in e segnalazioni</h1>
-          <p>Questa parte resta separata dalla landing, così non confonde il percorso commerciale.</p>
+          <div class="eyebrow">Demo prodotto</div>
+          <h1>Esplora la piattaforma</h1>
+          <p>Onboarding, buddy, gruppi, check-in e segnalazioni in una demo separata dalla parte commerciale.</p>
         </div>
 
         <section class="metrics-strip">
-          <article class="metric-card">
-            <span>Gruppi attivi</span>
-            <strong id="metric-groups">—</strong>
-          </article>
-          <article class="metric-card">
-            <span>Inclusione media</span>
-            <strong id="metric-inclusion">—</strong>
-          </article>
-          <article class="metric-card">
-            <span>Buddy disponibili</span>
-            <strong id="metric-buddies">—</strong>
-          </article>
+          <article class="metric-card"><span>Gruppi attivi</span><strong id="metric-groups">—</strong></article>
+          <article class="metric-card"><span>Inclusione media</span><strong id="metric-inclusion">—</strong></article>
+          <article class="metric-card"><span>Buddy disponibili</span><strong id="metric-buddies">—</strong></article>
         </section>
 
         <div class="two-col-layout app-layout">
@@ -49,7 +49,7 @@
             </div>
 
             <form id="onboarding-form" class="form-card stack-sm">
-              <h2>Crea il tuo spazio sociale</h2>
+              <h2>Crea il tuo profilo</h2>
               <label><span>Nome</span><input type="text" name="name" required /></label>
               <label><span>Città</span><input type="text" name="city" /></label>
               <label><span>Comfort sociale</span><input type="range" min="1" max="5" name="comfort" value="3" /></label>
@@ -101,7 +101,7 @@
               </article>
 
               <article class="entity-card">
-                <h3>Buddy match</h3>
+                <h3>Buddy suggerito</h3>
                 <div id="buddy-content"></div>
               </article>
 
@@ -133,7 +133,7 @@
                 </form>
 
                 <form id="report-form" class="form-card stack-sm">
-                  <h3>Esclusione o bullismo</h3>
+                  <h3>Segnala un problema</h3>
                   <label>
                     <span>Categoria</span>
                     <select name="category">
@@ -167,11 +167,16 @@
                 </article>
               </div>
             </div>
+
+            <div id="app-fallback" class="success-box hidden">
+              <div class="eyebrow">Demo non disponibile</div>
+              <h2>La pagina è attiva, ma il backend non sta rispondendo.</h2>
+              <p>Controlla <strong>VITE_API_BASE_URL</strong> su Vercel e verifica che il backend Render sia online.</p>
+            </div>
           </section>
         </div>
       </div>
     </main>
-
     <div id="toast" class="toast" aria-live="polite"></div>
     <script type="module" src="/src/main.js"></script>
   </body>

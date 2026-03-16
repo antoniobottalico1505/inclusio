@@ -1,22 +1,57 @@
 <!doctype html>
 <html lang="it">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Inclusio — Pagamento completato</title>
-  </head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/svg+xml" href="/logo-square.svg" />
+  <meta name="theme-color" content="#15364D" />
+  <meta property="og:image" content="/logo-square.svg" />
+  <title>Inclusio — Pagamento completato</title>
+  <meta name="description" content="Pagamento completato correttamente." />
+</head>
   <body data-page="success">
+    <header class="site-header">
+      <div class="shell nav-row">
+        <a class="brand" href="/">
+          <img class="brand-logo" src="/logo-square.svg" alt="Logo Inclusio" />
+          <span>Inclusio</span>
+        </a>
+        <nav class="nav-links">
+          <a href="/">Home</a>
+          <a href="/pricing">Prezzi</a>
+          <a href="/schools">Scuole</a>
+          <a href="/waitlist">Lista d'attesa</a>
+          <a class="button button-primary button-sm" href="/app">Apri demo</a>
+        </nav>
+      </div>
+    </header>
+
     <main class="section">
       <div class="shell success-box">
         <div class="eyebrow">Pagamento completato</div>
-        <h1>Perfetto. Ora puoi riportare l'utente nella demo o in onboarding.</h1>
-        <p>Configura questo URL come redirect finale nei Payment Link di Stripe.</p>
+        <h1>Pagamento ricevuto correttamente</h1>
+        <p>Puoi riportare l’utente alla demo o alla dashboard iniziale senza schermate tecniche intermedie.</p>
         <div class="button-row">
           <a class="button button-primary" href="/app">Apri demo</a>
           <a class="button button-secondary" href="/pricing">Torna ai prezzi</a>
         </div>
       </div>
     </main>
+
+    <footer class="site-footer">
+      <div class="shell footer-row">
+        <div class="brand brand-footer">
+          <img class="brand-logo" src="/logo-square.svg" alt="Logo Inclusio" />
+          <span>Inclusio</span>
+        </div>
+        <div class="nav-links">
+          <a href="/pricing">Prezzi</a>
+          <a href="/schools">Scuole</a>
+          <a href="/waitlist">Lista d'attesa</a>
+          <a href="/app">Demo</a>
+        </div>
+      </div>
+    </footer>
     <div id="toast" class="toast" aria-live="polite"></div>
     <script type="module" src="/src/main.js"></script>
   </body>

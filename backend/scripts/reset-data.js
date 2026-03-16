@@ -1,9 +1,9 @@
-
 const fs = require('fs');
 const path = require('path');
 
-const seedPath = path.join(__dirname, '..', 'data', 'seed.json');
-const dbPath = path.join(__dirname, '..', 'data', 'db.json');
+const baseDir = path.join(__dirname, '..');
+const seedPath = path.join(baseDir, 'data', 'seed.json');
+const dbPath = path.join(baseDir, 'data', 'db.json');
 
 fs.copyFileSync(seedPath, dbPath);
-console.log('Database demo resettato.');
+console.log('Inclusio demo data reset completato.');

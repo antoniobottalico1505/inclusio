@@ -1,7 +1,7 @@
 {
   "name": "inclusio-backend",
-  "version": "1.0.0",
-  "description": "Backend API for Inclusio deployed on Render.",
+  "version": "1.1.0",
+  "description": "Backend API for Inclusio with Gmail lead notifications.",
   "main": "server.js",
   "type": "commonjs",
   "engines": {
@@ -14,6 +14,6 @@
   },
   "dependencies": {
     "express": "^4.21.2",
-    "nodemailer": "^8.0.2"
+    "nodemailer": "^6.9.16"
   }
 }

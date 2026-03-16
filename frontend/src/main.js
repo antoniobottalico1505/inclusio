@@ -5,77 +5,95 @@ const page = document.body?.dataset?.page || 'landing';
 
 const STRIPE_LINKS = {
   plusMonthly: import.meta.env.VITE_STRIPE_LINK_PLUS_MONTHLY || '',
-  plusYearly: import.meta.env.VITE_STRIPE_LINK_PLUS_YEARLY || '',
-  circleMonthly: import.meta.env.VITE_STRIPE_LINK_CIRCLE_MONTHLY || ''
+  plusYearly: import.meta.env.VITE_STRIPE_LINK_PLUS_YEARLY || ''
 };
 
 const PLAN_CATALOG = [
   {
     key: 'solo',
-    audience: 'Accesso iniziale',
+    audience: 'Per iniziare',
     name: 'Solo',
     price: '€0',
     period: '/mese',
-    description: 'Per provare la logica del prodotto senza attrito commerciale.',
+    description: 'Per esplorare il prodotto e provare la demo senza impegno.',
     features: [
       'accesso alla demo prodotto',
       'gruppi aperti e onboarding base',
       'check-in e segnalazioni',
-      'lista d\'attesa prioritaria per il lancio'
+      'aggiornamenti dalla lista d’attesa'
     ],
     ctaLabel: 'Apri la demo',
-    ctaHref: '/app'
+    ctaHref: '/app',
+    segment: 'consumer'
   },
   {
     key: 'plus-monthly',
     audience: 'Uso personale',
-    name: 'Plus',
+    name: 'Plus Mensile',
     price: '€12,90',
     period: '/mese',
-    description: 'Il piano B2C che può vendere davvero: basso attrito, chiaro, non tossico.',
+    description: 'Per chi vuole più continuità, introduzioni curate e percorsi sociali guidati.',
     features: [
       'introduzioni sociali curate',
       'slot prioritari nei cerchi guidati',
       'match buddy potenziati',
-      'filtri comfort / ritmo sociale',
       'percorsi suggeriti personalizzati'
     ],
-    highlight: true,
     ctaLabel: 'Attiva Plus',
-    ctaHref: STRIPE_LINKS.plusMonthly || '/waitlist'
+    ctaHref: STRIPE_LINKS.plusMonthly || '/waitlist',
+    highlight: true,
+    segment: 'consumer'
   },
   {
     key: 'plus-yearly',
-    audience: 'Uso personale annuale',
-    name: 'Plus Annual',
+    audience: 'Uso personale',
+    name: 'Plus Annuale',
     price: '€119',
     period: '/anno',
-    description: 'Versione annuale con due mesi effettivamente scontati.',
+    description: 'Versione annuale per chi vuole usare Inclusio con continuità.',
     features: [
-      'tutto di Plus',
+      'tutto del piano Plus',
       'risparmio rispetto al mensile',
-      'migliore conversione cashflow',
-      'migliore retention di progetto'
+      'accesso continuativo',
+      'priorità sulle novità'
     ],
     ctaLabel: 'Attiva Annuale',
-    ctaHref: STRIPE_LINKS.plusYearly || '/waitlist'
+    ctaHref: STRIPE_LINKS.plusYearly || '/waitlist',
+    segment: 'consumer'
   },
   {
-    key: 'partner',
-    audience: 'Scuole, community, HR',
-    name: 'Partner',
-    price: 'da €149',
-    period: '/mese',
-    description: 'Qui sta il margine serio: team, scuole, coworking, università, onboarding.',
+    key: 'school-starter',
+    audience: 'Scuole e community',
+    name: 'School Starter',
+    price: 'da €1.990',
+    period: '/anno',
+    description: 'Per istituti e community che vogliono migliorare integrazione e onboarding.',
     features: [
-      'dashboard organizzativa',
-      'leadership toolkit',
-      'micro-gruppi suggeriti',
-      'report di inclusione e rischio chiusura',
-      'setup commerciale assistito'
+      'dashboard istituto',
+      'cerchi guidati per nuovi ingressi',
+      'report base',
+      'setup iniziale'
     ],
     ctaLabel: 'Richiedi demo',
-    ctaHref: '/partner'
+    ctaHref: '/schools',
+    segment: 'schools'
+  },
+  {
+    key: 'school-pro',
+    audience: 'Campus e organizzazioni',
+    name: 'School Pro',
+    price: 'da €3.990',
+    period: '/anno',
+    description: 'Per contesti più grandi che richiedono più sedi, più referenti e più visibilità.',
+    features: [
+      'tutto dello Starter',
+      'supporto prioritario',
+      'report avanzati',
+      'configurazione multi-segmento'
+    ],
+    ctaLabel: 'Parla con noi',
+    ctaHref: '/schools',
+    segment: 'schools'
   }
 ];
 
@@ -120,7 +138,7 @@ function showToast(message, tone = 'default') {
   toast.textContent = message;
   toast.className = `toast show ${tone === 'error' ? 'toast-error' : ''}`;
   if (state.toastTimer) clearTimeout(state.toastTimer);
-  state.toastTimer = setTimeout(() => toast.classList.remove('show'), 2800);
+  state.toastTimer = setTimeout(() => toast.classList.remove('show'), 3000);
 }
 
 async function api(path, options = {}) {
@@ -181,16 +199,16 @@ function renderValueCards() {
 
   const items = [
     {
-      title: 'Acquisizione',
-      text: 'Landing separata, pricing separato, waitlist separata: meno confusione, più conversione.'
+      title: 'Piccoli gruppi curati',
+      text: 'Cerchi con obiettivi chiari, contesti più semplici da vivere e meno dispersione sociale.'
     },
     {
-      title: 'Monetizzazione',
-      text: 'Free per entrare, Plus per utenti, Partner per margine vero. Niente dark pattern.'
+      title: 'Buddy introduttivi',
+      text: 'Una persona ponte aiuta i nuovi ingressi a sentirsi accolti fin dal primo momento.'
     },
     {
-      title: 'Prodotto',
-      text: 'La demo resta viva in una pagina dedicata, senza sporcare la parte commerciale.'
+      title: 'Strumenti per scuole',
+      text: 'Dashboard, onboarding e segnali leggeri per chi gestisce gruppi, classi e community.'
     }
   ];
 
@@ -198,6 +216,37 @@ function renderValueCards() {
     .map(
       (item) => `
         <article class="feature-card">
+          <h3>${escapeHtml(item.title)}</h3>
+          <p>${escapeHtml(item.text)}</p>
+        </article>
+      `
+    )
+    .join('');
+}
+
+function renderSteps() {
+  const node = document.getElementById('steps-grid');
+  if (!node) return;
+
+  const items = [
+    {
+      title: '1. Entra',
+      text: 'Profilo leggero, interessi essenziali e obiettivi sociali dichiarati in modo semplice.'
+    },
+    {
+      title: '2. Connettiti',
+      text: 'Buddy, cerchi guidati e attività a basso attrito aiutano a rompere il ghiaccio.'
+    },
+    {
+      title: '3. Resta dentro',
+      text: 'Check-in, suggerimenti e supporto organizzativo mantengono le relazioni più vive.'
+    }
+  ];
+
+  node.innerHTML = items
+    .map(
+      (item) => `
+        <article class="feature-card step-card">
           <h3>${escapeHtml(item.title)}</h3>
           <p>${escapeHtml(item.text)}</p>
         </article>
@@ -273,7 +322,6 @@ function renderActionPlan() {
   const list = document.getElementById('next-actions');
   const actions = state.summary?.actionPlan || [];
   if (!list) return;
-
   list.innerHTML = actions.map((item) => `<li>${escapeHtml(item)}</li>`).join('');
 }
 
@@ -422,6 +470,8 @@ function renderSummary() {
   }
 
   panel.classList.remove('hidden');
+  document.getElementById('app-fallback')?.classList.add('hidden');
+
   setText('welcome-name', `Ciao ${summary.user.name}`);
   setText('belonging-score', String(summary.stats.belongingScore));
   setText('joined-groups', String(summary.stats.joinedGroups));
@@ -690,21 +740,32 @@ function handleLogout() {
 }
 
 function bootstrapLanding() {
-  renderPlanCards('featured-plans', PLAN_CATALOG.slice(0, 3));
+  renderPlanCards('featured-plans', PLAN_CATALOG.filter((plan) => ['solo', 'plus-monthly', 'school-starter'].includes(plan.key)));
   renderValueCards();
+  renderSteps();
 }
 
 function bootstrapPricing() {
   renderPlanCards('pricing-plans', PLAN_CATALOG);
 }
 
+function bootstrapSchools() {
+  renderPlanCards('schools-plans', PLAN_CATALOG.filter((plan) => plan.segment === 'schools'));
+  document.getElementById('partner-form')?.addEventListener('submit', handlePartnerLead);
+}
+
 function bootstrapWaitlistPage() {
-  renderPlanCards('mini-pricing', PLAN_CATALOG.slice(0, 2));
+  renderPlanCards('mini-pricing', PLAN_CATALOG.filter((plan) => ['solo', 'plus-monthly'].includes(plan.key)));
   document.getElementById('waitlist-form')?.addEventListener('submit', handleWaitlist);
 }
 
-function bootstrapPartnerPage() {
-  document.getElementById('partner-form')?.addEventListener('submit', handlePartnerLead);
+function showAppFallback(message) {
+  document.getElementById('app-panel')?.classList.add('hidden');
+  const fallback = document.getElementById('app-fallback');
+  if (!fallback) return;
+  fallback.classList.remove('hidden');
+  const p = fallback.querySelector('p');
+  if (p && message) p.innerHTML = message;
 }
 
 async function bootstrapAppPage() {
@@ -722,15 +783,12 @@ async function bootstrapAppPage() {
     }
   } catch (error) {
     console.error('Bootstrap error:', error, 'API_BASE=', API_BASE);
-    showToast(
-      API_BASE ? `Connessione al backend non riuscita: ${error?.message || 'Failed to fetch'}` : 'Configurazione mancante: VITE_API_BASE_URL',
-      'error'
-    );
+    const message = !API_BASE
+      ? 'Controlla <strong>VITE_API_BASE_URL</strong> su Vercel e pubblica di nuovo il frontend.'
+      : 'Controlla che il backend Render sia online e che <strong>CORS_ORIGIN</strong> includa il dominio Vercel.';
+    showAppFallback(message);
+    showToast(API_BASE ? `Connessione al backend non riuscita: ${error?.message || 'Failed to fetch'}` : 'Configurazione mancante: VITE_API_BASE_URL', 'error');
   }
-}
-
-function bootstrapStaticPage() {
-  renderPlanCards('pricing-inline', PLAN_CATALOG.slice(0, 3));
 }
 
 async function bootstrap() {
@@ -740,13 +798,14 @@ async function bootstrap() {
     bootstrapPricing();
   } else if (page === 'waitlist') {
     bootstrapWaitlistPage();
-  } else if (page === 'partner') {
-    bootstrapPartnerPage();
+  } else if (page === 'schools') {
+    bootstrapSchools();
   } else if (page === 'app') {
     await bootstrapAppPage();
-  } else {
-    bootstrapStaticPage();
   }
 }
 
-bootstrap();
+bootstrap().catch((error) => {
+  console.error('Global bootstrap error:', error);
+  showToast('Si è verificato un errore inatteso.', 'error');
+});

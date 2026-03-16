@@ -1,47 +1,25 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const nodemailer = require('nodemailer');
+
+let nodemailer = null;
+try {
+  nodemailer = require('nodemailer');
+} catch (error) {
+  nodemailer = null;
+}
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT || 3000);
 const HOST = '0.0.0.0';
+
 const DB_PATH = path.join(__dirname, 'data', 'db.json');
 const SEED_PATH = path.join(__dirname, 'data', 'seed.json');
+
 const OWNER_EMAIL = process.env.OWNER_EMAIL || '';
 const GMAIL_USER = process.env.GMAIL_USER || '';
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || '';
 const APP_BASE_URL = process.env.APP_BASE_URL || '';
-
-const mailTransport =
-  GMAIL_USER && GMAIL_APP_PASSWORD
-    ? nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: GMAIL_USER,
-          pass: GMAIL_APP_PASSWORD
-        }
-      })
-    : null;
-
-async function sendEmail({ to, subject, html }) {
-  if (!mailTransport || !to) return;
-
-  await mailTransport.sendMail({
-    from: GMAIL_USER,
-    to,
-    subject,
-    html
-  });
-}
-
-async function safeSendEmail(payload) {
-  try {
-    await sendEmail(payload);
-  } catch (error) {
-    console.error('Email send failed:', error.message);
-  }
-}
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
@@ -54,11 +32,11 @@ const allowedOrigins = (process.env.CORS_ORIGIN || '')
 app.use((req, res, next) => {
   const origin = req.headers.origin;
 
-  if (origin) {
+  if (!origin) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  } else if (!allowedOrigins.length || allowedOrigins.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Vary', 'Origin');
-  } else {
-    res.setHeader('Access-Control-Allow-Origin', '*');
   }
 
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
@@ -78,19 +56,79 @@ function ensureDb() {
   }
 }
 
+function baseDbShape() {
+  return {
+    interests: [],
+    users: [],
+    groups: [],
+    checkins: [],
+    reports: [],
+    waitlist: [],
+    partnerLeads: [],
+    marketing: {
+      plans: [],
+      faqs: []
+    }
+  };
+}
+
+function normalizeDb(raw) {
+  const base = baseDbShape();
+  const db = {
+    ...base,
+    ...(raw || {}),
+    marketing: {
+      ...base.marketing,
+      ...((raw && raw.marketing) || {})
+    }
+  };
+
+  db.interests = Array.isArray(db.interests) ? db.interests : [];
+  db.users = Array.isArray(db.users) ? db.users : [];
+  db.groups = Array.isArray(db.groups) ? db.groups : [];
+  db.checkins = Array.isArray(db.checkins) ? db.checkins : [];
+  db.reports = Array.isArray(db.reports) ? db.reports : [];
+  db.waitlist = Array.isArray(db.waitlist) ? db.waitlist : [];
+  db.partnerLeads = Array.isArray(db.partnerLeads) ? db.partnerLeads : [];
+  db.marketing.plans = Array.isArray(db.marketing.plans) ? db.marketing.plans : [];
+  db.marketing.faqs = Array.isArray(db.marketing.faqs) ? db.marketing.faqs : [];
+
+  db.groups = db.groups.map((group) => ({
+    ...group,
+    tags: Array.isArray(group.tags) ? group.tags : [],
+    members: Array.isArray(group.members) ? group.members : [],
+    activities: Array.isArray(group.activities)
+      ? group.activities.map((activity) => ({
+          ...activity,
+          rsvps: Array.isArray(activity.rsvps) ? activity.rsvps : []
+        }))
+      : []
+  }));
+
+  db.users = db.users.map((user) => ({
+    ...user,
+    interests: Array.isArray(user.interests) ? user.interests : [],
+    goals: Array.isArray(user.goals) ? user.goals : [],
+    joinedGroupIds: Array.isArray(user.joinedGroupIds) ? user.joinedGroupIds : []
+  }));
+
+  return db;
+}
+
 function readDb() {
   ensureDb();
-  return JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+  const raw = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+  return normalizeDb(raw);
 }
 
 function writeDb(db) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), 'utf8');
+  fs.writeFileSync(DB_PATH, JSON.stringify(normalizeDb(db), null, 2), 'utf8');
 }
 
 function slugify(value = '') {
-  return String(value)
+  return String(value || '')
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)/g, '');
@@ -102,7 +140,7 @@ function makeId(prefix) {
 
 function avg(values = []) {
   if (!values.length) return 0;
-  return values.reduce((sum, value) => sum + value, 0) / values.length;
+  return values.reduce((sum, value) => sum + Number(value || 0), 0) / values.length;
 }
 
 function clamp(value, min, max) {
@@ -110,7 +148,7 @@ function clamp(value, min, max) {
 }
 
 function unique(items = []) {
-  return Array.from(new Set(items));
+  return Array.from(new Set(items.filter(Boolean)));
 }
 
 function text(value, max = 280) {
@@ -123,6 +161,15 @@ function email(value) {
 
 function isValidEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email(value));
+}
+
+function esc(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 function getUserById(db, userId) {
@@ -142,13 +189,13 @@ function getUserReports(db, userId) {
 }
 
 function getGroupMemberProfiles(db, group) {
-  return group.members
+  return (group.members || [])
     .map((memberId) => getUserById(db, memberId))
     .filter(Boolean)
     .map((member) => ({
       id: member.id,
       name: member.name,
-      interests: member.interests,
+      interests: member.interests || [],
       comfort: member.comfort,
       energy: member.energy
     }));
@@ -157,19 +204,22 @@ function getGroupMemberProfiles(db, group) {
 function serializeGroup(db, group, currentUserId = null) {
   return {
     ...group,
-    memberCount: group.members.length,
-    spotsLeft: Math.max(group.sizeLimit - group.members.length, 0),
-    isJoined: currentUserId ? group.members.includes(currentUserId) : false,
+    memberCount: (group.members || []).length,
+    spotsLeft: Math.max(Number(group.sizeLimit || 0) - (group.members || []).length, 0),
+    isJoined: currentUserId ? (group.members || []).includes(currentUserId) : false,
     membersPreview: getGroupMemberProfiles(db, group)
   };
 }
 
 function scoreGroupForUser(group, user) {
-  const commonInterests = group.tags.filter((tag) => user.interests.includes(tag)).length;
+  const groupTags = Array.isArray(group.tags) ? group.tags : [];
+  const userInterests = Array.isArray(user.interests) ? user.interests : [];
+  const commonInterests = groupTags.filter((tag) => userInterests.includes(tag)).length;
   const comfortGap = Math.abs((group.targetComfort || 3) - (user.comfort || 3));
   const energyGap = Math.abs((group.energy || 3) - (user.energy || 3));
-  const spaceBonus = group.members.length < group.sizeLimit ? 1 : -2;
-  const opennessBonus = group.members.length <= Math.max(2, Math.floor(group.sizeLimit / 2)) ? 0.8 : 0.25;
+  const spaceBonus = (group.members || []).length < Number(group.sizeLimit || 0) ? 1 : -2;
+  const opennessBonus = (group.members || []).length <= Math.max(2, Math.floor(Number(group.sizeLimit || 0) / 2)) ? 0.8 : 0.25;
+
   return Number((commonInterests * 3 - comfortGap * 1.1 - energyGap * 0.7 + spaceBonus + opennessBonus).toFixed(2));
 }
 
@@ -178,16 +228,16 @@ function recommendGroups(db, userId) {
   if (!user) return [];
 
   return db.groups
-    .filter((group) => !group.members.includes(userId) && group.members.length < group.sizeLimit)
+    .filter((group) => !(group.members || []).includes(userId) && (group.members || []).length < Number(group.sizeLimit || 0))
     .map((group) => ({
       ...serializeGroup(db, group, userId),
       matchScore: scoreGroupForUser(group, user),
       matchReasons: unique([
-        group.tags.some((tag) => user.interests.includes(tag)) ? 'Interessi in comune' : null,
+        (group.tags || []).some((tag) => (user.interests || []).includes(tag)) ? 'Interessi in comune' : null,
         Math.abs((group.targetComfort || 3) - (user.comfort || 3)) <= 1 ? 'Comfort compatibile' : null,
         Math.abs((group.energy || 3) - (user.energy || 3)) <= 1 ? 'Ritmo sociale adatto' : null,
-        group.members.length <= Math.max(2, Math.floor(group.sizeLimit / 2)) ? 'Gruppo aperto a nuovi ingressi' : null
-      ].filter(Boolean))
+        (group.members || []).length <= Math.max(2, Math.floor(Number(group.sizeLimit || 0) / 2)) ? 'Gruppo aperto a nuovi ingressi' : null
+      ])
     }))
     .sort((a, b) => b.matchScore - a.matchScore)
     .slice(0, 6);
@@ -200,15 +250,17 @@ function recommendBuddy(db, userId) {
   const candidates = db.users
     .filter((candidate) => candidate.id !== userId && candidate.buddyEligible)
     .map((candidate) => {
-      const sharedInterests = candidate.interests.filter((interest) => user.interests.includes(interest));
+      const candidateInterests = Array.isArray(candidate.interests) ? candidate.interests : [];
+      const sharedInterests = candidateInterests.filter((interest) => (user.interests || []).includes(interest));
       const comfortGap = Math.abs((candidate.comfort || 3) - (user.comfort || 3));
       const score = sharedInterests.length * 3 + (candidate.mentor ? 1.5 : 0) - comfortGap;
+
       return {
         id: candidate.id,
         name: candidate.name,
         city: candidate.city,
         mentor: Boolean(candidate.mentor),
-        interests: candidate.interests,
+        interests: candidateInterests,
         sharedInterests,
         note: candidate.accessibility,
         score
@@ -221,12 +273,15 @@ function recommendBuddy(db, userId) {
 
 function computeActionPlan(summary) {
   if (!summary) return [];
+
   const actions = [];
+
   if (!summary.myGroups.length) actions.push('Entra in un primo cerchio consigliato con pochi membri.');
   if (summary.stats.plannedActivities === 0) actions.push('Prenota una micro-attività guidata per rompere il ghiaccio in modo semplice.');
   if (summary.buddy) actions.push(`Scrivi al buddy suggerito: ${summary.buddy.name}.`);
   if (summary.stats.recentAnxietyAverage >= 3) actions.push('Scegli gruppi con comfort basso o medio e attività strutturate.');
   if (summary.stats.recentInclusionAverage <= 3) actions.push('Fai un check-in dopo il prossimo incontro per migliorare i suggerimenti.');
+
   return unique(actions).slice(0, 4);
 }
 
@@ -234,17 +289,23 @@ function computeUserSummary(db, userId) {
   const user = getUserById(db, userId);
   if (!user) return null;
 
-  const myGroups = db.groups.filter((group) => group.members.includes(userId));
+  const myGroups = db.groups.filter((group) => (group.members || []).includes(userId));
   const checkins = getUserCheckins(db, userId);
   const recentCheckins = checkins.slice(0, 5);
   const reports = getUserReports(db, userId).map((report) => ({
     ...report,
-    statusLabel: report.status === 'reviewing' ? 'In revisione' : report.status === 'resolved' ? 'Risolta' : 'Aperta'
+    statusLabel:
+      report.status === 'reviewing'
+        ? 'In revisione'
+        : report.status === 'resolved'
+          ? 'Risolta'
+          : 'Aperta'
   }));
+
   const belongingAvg = avg(recentCheckins.map((item) => item.included || 0));
   const anxietyAvg = avg(recentCheckins.map((item) => item.anxiety || 0));
   const activityCount = myGroups.reduce((sum, group) => {
-    return sum + group.activities.filter((activity) => activity.rsvps.includes(userId)).length;
+    return sum + (group.activities || []).filter((activity) => (activity.rsvps || []).includes(userId)).length;
   }, 0);
 
   const stats = {
@@ -281,6 +342,7 @@ function computeUserSummary(db, userId) {
 function computeInsights(db) {
   const includedValues = db.checkins.map((item) => item.included || 0);
   const anxietyValues = db.checkins.map((item) => item.anxiety || 0);
+
   const lonelyUsers = db.users.filter((user) => {
     const userCheckins = getUserCheckins(db, user.id).slice(0, 3);
     if (!userCheckins.length) return false;
@@ -291,8 +353,8 @@ function computeInsights(db) {
     .map((group) => ({
       id: group.id,
       name: group.name,
-      fillRate: Number((group.members.length / group.sizeLimit).toFixed(2)),
-      spotsLeft: Math.max(group.sizeLimit - group.members.length, 0)
+      fillRate: Number((((group.members || []).length / Math.max(Number(group.sizeLimit || 1), 1))).toFixed(2)),
+      spotsLeft: Math.max(Number(group.sizeLimit || 0) - (group.members || []).length, 0)
     }))
     .sort((a, b) => a.spotsLeft - b.spotsLeft);
 
@@ -308,7 +370,8 @@ function computeInsights(db) {
     lonelyUsers: lonelyUsers.map((user) => ({ id: user.id, name: user.name, city: user.city })),
     closedGroups,
     reportsByCategory: db.reports.reduce((acc, report) => {
-      acc[report.category] = (acc[report.category] || 0) + 1;
+      const category = report.category || 'altro';
+      acc[category] = (acc[category] || 0) + 1;
       return acc;
     }, {})
   };
@@ -318,8 +381,42 @@ function getMarketing(db) {
   return {
     plans: db.marketing?.plans || [],
     faqs: db.marketing?.faqs || [],
-    demoUsers: db.users.slice(0, 4).map((user) => ({ id: user.id, name: user.name, city: user.city }))
+    demoUsers: db.users.slice(0, 4).map((user) => ({
+      id: user.id,
+      name: user.name,
+      city: user.city
+    }))
   };
+}
+
+const mailTransport =
+  nodemailer && GMAIL_USER && GMAIL_APP_PASSWORD
+    ? nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: GMAIL_USER,
+          pass: GMAIL_APP_PASSWORD
+        }
+      })
+    : null;
+
+async function sendEmail({ to, subject, html }) {
+  if (!mailTransport || !to) return;
+
+  await mailTransport.sendMail({
+    from: GMAIL_USER,
+    to,
+    subject,
+    html
+  });
+}
+
+async function safeSendEmail(payload) {
+  try {
+    await sendEmail(payload);
+  } catch (error) {
+    console.error('Email send failed:', error.message);
+  }
 }
 
 app.get('/', (req, res) => {
@@ -338,6 +435,7 @@ app.get('/api/health', (req, res) => {
 app.get('/api/bootstrap', (req, res) => {
   const db = readDb();
   const userId = req.query.userId ? String(req.query.userId) : null;
+
   res.json({
     appName: 'Inclusio',
     interests: db.interests,
@@ -349,13 +447,18 @@ app.get('/api/bootstrap', (req, res) => {
 
 app.post('/api/users/onboard', (req, res) => {
   const db = readDb();
+
   const name = text(req.body.name, 40);
   const city = text(req.body.city, 40) || 'Online';
   const comfort = clamp(Number(req.body.comfort || 3), 1, 5);
   const energy = clamp(Number(req.body.energy || 3), 1, 5);
   const accessibility = text(req.body.accessibility, 220);
-  const interests = Array.isArray(req.body.interests) ? req.body.interests.slice(0, 8).map((item) => text(item, 40)).filter(Boolean) : [];
-  const goals = Array.isArray(req.body.goals) ? req.body.goals.slice(0, 4).map((item) => text(item, 40)).filter(Boolean) : [];
+  const interests = Array.isArray(req.body.interests)
+    ? req.body.interests.slice(0, 8).map((item) => text(item, 40)).filter(Boolean)
+    : [];
+  const goals = Array.isArray(req.body.goals)
+    ? req.body.goals.slice(0, 4).map((item) => text(item, 40)).filter(Boolean)
+    : [];
 
   if (!name) {
     return res.status(400).json({ error: 'Il nome è obbligatorio.' });
@@ -377,15 +480,22 @@ app.post('/api/users/onboard', (req, res) => {
 
   db.users.push(user);
   writeDb(db);
-  return res.status(201).json({ user, summary: computeUserSummary(db, user.id), insights: computeInsights(db) });
+
+  return res.status(201).json({
+    user,
+    summary: computeUserSummary(db, user.id),
+    insights: computeInsights(db)
+  });
 });
 
 app.get('/api/users/:userId', (req, res) => {
   const db = readDb();
   const summary = computeUserSummary(db, req.params.userId);
+
   if (!summary) {
     return res.status(404).json({ error: 'Profilo non trovato.' });
   }
+
   res.json(summary);
 });
 
@@ -404,15 +514,18 @@ app.post('/api/groups/:groupId/join', (req, res) => {
   if (!group || !user) {
     return res.status(404).json({ error: 'Gruppo o profilo non trovato.' });
   }
-  if (group.members.includes(userId)) {
+
+  if ((group.members || []).includes(userId)) {
     return res.json({ summary: computeUserSummary(db, userId), message: 'Sei già in questo gruppo.' });
   }
-  if (group.members.length >= group.sizeLimit) {
+
+  if ((group.members || []).length >= Number(group.sizeLimit || 0)) {
     return res.status(409).json({ error: 'Questo gruppo è pieno.' });
   }
 
   group.members.push(userId);
   user.joinedGroupIds = unique([...(user.joinedGroupIds || []), group.id]);
+
   writeDb(db);
   res.json({ summary: computeUserSummary(db, userId), message: 'Ingresso nel gruppo completato.' });
 });
@@ -427,11 +540,13 @@ app.post('/api/groups/:groupId/leave', (req, res) => {
     return res.status(404).json({ error: 'Gruppo o profilo non trovato.' });
   }
 
-  group.members = group.members.filter((memberId) => memberId !== userId);
+  group.members = (group.members || []).filter((memberId) => memberId !== userId);
   user.joinedGroupIds = (user.joinedGroupIds || []).filter((id) => id !== group.id);
-  group.activities.forEach((activity) => {
-    activity.rsvps = activity.rsvps.filter((id) => id !== userId);
+
+  (group.activities || []).forEach((activity) => {
+    activity.rsvps = (activity.rsvps || []).filter((id) => id !== userId);
   });
+
   writeDb(db);
   res.json({ summary: computeUserSummary(db, userId), message: 'Hai lasciato il gruppo.' });
 });
@@ -445,19 +560,21 @@ app.post('/api/groups/:groupId/activities/:activityId/rsvp', (req, res) => {
   if (!group || !user) {
     return res.status(404).json({ error: 'Gruppo o profilo non trovato.' });
   }
-  if (!group.members.includes(userId)) {
+
+  if (!(group.members || []).includes(userId)) {
     return res.status(409).json({ error: 'Entra prima nel gruppo.' });
   }
 
-  const activity = group.activities.find((item) => item.id === req.params.activityId);
+  const activity = (group.activities || []).find((item) => item.id === req.params.activityId);
+
   if (!activity) {
     return res.status(404).json({ error: 'Attività non trovata.' });
   }
 
-  if (activity.rsvps.includes(userId)) {
+  if ((activity.rsvps || []).includes(userId)) {
     activity.rsvps = activity.rsvps.filter((id) => id !== userId);
   } else {
-    activity.rsvps.push(userId);
+    activity.rsvps = [...(activity.rsvps || []), userId];
   }
 
   writeDb(db);
@@ -468,6 +585,7 @@ app.post('/api/checkins', (req, res) => {
   const db = readDb();
   const userId = String(req.body.userId || '');
   const user = getUserById(db, userId);
+
   if (!user) {
     return res.status(404).json({ error: 'Profilo non trovato.' });
   }
@@ -484,13 +602,19 @@ app.post('/api/checkins', (req, res) => {
 
   db.checkins.unshift(checkin);
   writeDb(db);
-  res.status(201).json({ checkin, summary: computeUserSummary(db, userId), insights: computeInsights(db) });
+
+  res.status(201).json({
+    checkin,
+    summary: computeUserSummary(db, userId),
+    insights: computeInsights(db)
+  });
 });
 
 app.post('/api/reports', (req, res) => {
   const db = readDb();
   const userId = String(req.body.userId || '');
   const user = getUserById(db, userId);
+
   if (!user) {
     return res.status(404).json({ error: 'Profilo non trovato.' });
   }
@@ -507,7 +631,12 @@ app.post('/api/reports', (req, res) => {
 
   db.reports.unshift(report);
   writeDb(db);
-  res.status(201).json({ report, summary: computeUserSummary(db, userId), insights: computeInsights(db) });
+
+  res.status(201).json({
+    report,
+    summary: computeUserSummary(db, userId),
+    insights: computeInsights(db)
+  });
 });
 
 app.post('/api/waitlist', async (req, res) => {
@@ -526,10 +655,7 @@ app.post('/api/waitlist', async (req, res) => {
 
   const existing = db.waitlist.find((item) => item.email === emailValue);
   if (existing) {
-    return res.json({
-      ok: true,
-      message: "Questa email è già presente nella lista d'attesa."
-    });
+    return res.json({ ok: true, message: 'Questa email è già presente nella lista d\'attesa.' });
   }
 
   db.waitlist.unshift({
@@ -549,10 +675,10 @@ app.post('/api/waitlist', async (req, res) => {
       subject: `[Inclusio] Nuova iscrizione waitlist — ${nameValue}`,
       html: `
         <h2>Nuova iscrizione waitlist</h2>
-        <p><strong>Nome:</strong> ${nameValue}</p>
-        <p><strong>Email:</strong> ${emailValue}</p>
-        <p><strong>Ruolo:</strong> ${role}</p>
-        <p><strong>Goal:</strong> ${goal}</p>
+        <p><strong>Nome:</strong> ${esc(nameValue)}</p>
+        <p><strong>Email:</strong> ${esc(emailValue)}</p>
+        <p><strong>Ruolo:</strong> ${esc(role)}</p>
+        <p><strong>Goal:</strong> ${esc(goal)}</p>
         <p><strong>Quando:</strong> ${new Date().toISOString()}</p>
       `
     }),
@@ -561,18 +687,15 @@ app.post('/api/waitlist', async (req, res) => {
       subject: 'Inclusio — iscrizione confermata',
       html: `
         <h2>Sei dentro alla lista d'attesa</h2>
-        <p>Ciao ${nameValue},</p>
+        <p>Ciao ${esc(nameValue)},</p>
         <p>abbiamo registrato la tua richiesta per Inclusio.</p>
         <p>Ti aggiorneremo quando apriremo l'accesso o i percorsi Plus.</p>
-        <p><a href="${APP_BASE_URL || '#'}">Vai al sito</a></p>
+        <p><a href="${esc(APP_BASE_URL || '#')}">Vai al sito</a></p>
       `
     })
   ]);
 
-  return res.status(201).json({
-    ok: true,
-    message: 'Iscrizione completata. Ti aggiorneremo presto.'
-  });
+  return res.status(201).json({ ok: true, message: 'Iscrizione completata. Ti aggiorneremo presto.' });
 });
 
 app.post('/api/partner-leads', async (req, res) => {
@@ -607,11 +730,11 @@ app.post('/api/partner-leads', async (req, res) => {
       subject: `[Inclusio] Nuovo lead partner — ${organization}`,
       html: `
         <h2>Nuovo lead partner</h2>
-        <p><strong>Nome:</strong> ${nameValue}</p>
-        <p><strong>Email:</strong> ${emailValue}</p>
-        <p><strong>Organizzazione:</strong> ${organization}</p>
-        <p><strong>Goal:</strong> ${goal}</p>
-        <p><strong>Messaggio:</strong><br/>${message || 'Nessun messaggio'}</p>
+        <p><strong>Nome:</strong> ${esc(nameValue)}</p>
+        <p><strong>Email:</strong> ${esc(emailValue)}</p>
+        <p><strong>Organizzazione:</strong> ${esc(organization)}</p>
+        <p><strong>Goal:</strong> ${esc(goal)}</p>
+        <p><strong>Messaggio:</strong><br/>${esc(message || 'Nessun messaggio')}</p>
       `
     }),
     safeSendEmail({
@@ -619,18 +742,15 @@ app.post('/api/partner-leads', async (req, res) => {
       subject: 'Inclusio — richiesta demo ricevuta',
       html: `
         <h2>Richiesta demo ricevuta</h2>
-        <p>Ciao ${nameValue},</p>
-        <p>abbiamo ricevuto la tua richiesta per <strong>${organization}</strong>.</p>
+        <p>Ciao ${esc(nameValue)},</p>
+        <p>abbiamo ricevuto la tua richiesta per <strong>${esc(organization)}</strong>.</p>
         <p>Ti ricontatteremo con una proposta demo.</p>
-        <p><a href="${APP_BASE_URL || '#'}">Vai al sito</a></p>
+        <p><a href="${esc(APP_BASE_URL || '#')}">Vai al sito</a></p>
       `
     })
   ]);
 
-  return res.status(201).json({
-    ok: true,
-    message: 'Richiesta demo ricevuta. Ti contatteremo con una proposta.'
-  });
+  return res.status(201).json({ ok: true, message: 'Richiesta demo ricevuta. Ti contatteremo con una proposta.' });
 });
 
 app.get('/api/insights', (req, res) => {
@@ -649,4 +769,9 @@ app.get('/favicon.ico', (req, res) => {
 
 app.listen(PORT, HOST, () => {
   console.log(`Inclusio API in ascolto su http://${HOST}:${PORT}`);
+  if (!nodemailer) {
+    console.log('Nodemailer non installato: email Gmail disabilitate finché non esegui npm install nodemailer');
+  } else if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
+    console.log('Credenziali Gmail mancanti: email disabilitate finché non imposti GMAIL_USER e GMAIL_APP_PASSWORD');
+  }
 });
