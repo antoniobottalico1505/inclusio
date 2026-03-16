@@ -16,18 +16,14 @@ const allowedOrigins = (process.env.CORS_ORIGIN || '')
   .map((item) => item.trim())
   .filter(Boolean);
 
-const allowAnyOrigin = allowedOrigins.includes('*');
-
 app.use((req, res, next) => {
   const origin = req.headers.origin;
 
-  if (!origin) {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-  } else if (allowAnyOrigin) {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-  } else if (!allowedOrigins.length || allowedOrigins.includes(origin)) {
+  if (origin) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Vary', 'Origin');
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', '*');
   }
 
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');

@@ -2,8 +2,41 @@ import './styles.css';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 
-if (!API_BASE) {
-  throw new Error('Missing VITE_API_BASE_URL in production environment.');
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function apiGetJson(path) {
+  if (!API_BASE) {
+    throw new Error('Missing VITE_API_BASE_URL');
+  }
+
+  const attempts = [0, 1500, 3000, 5000];
+  let lastError = null;
+
+  for (const delay of attempts) {
+    if (delay > 0) {
+      await sleep(delay);
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}${path}`, {
+        method: 'GET',
+        mode: 'cors',
+        cache: 'no-store',
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || `HTTP ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      lastError = error;
+      console.error('GET failed:', path, error);
+    }
+  }
+
+  throw lastError || new Error('Failed to fetch');
 }
 
 const state = {
@@ -622,9 +655,16 @@ async function bootstrap() {
     if (state.userId && !state.summary) {
       await loadUser(state.userId);
     }
-  } catch (error) {
-    showToast(error?.message || 'Errore durante il caricamento iniziale.', 'error');
-  }
+} catch (error) {
+  console.error('Bootstrap error:', error, 'API_BASE=', API_BASE);
+
+  showToast(
+    API_BASE
+      ? `Connessione al backend non riuscita: ${error?.message || 'Failed to fetch'}`
+      : 'Configurazione mancante: VITE_API_BASE_URL',
+    'error'
+  );
+}
 }
 
 bootstrap();
