@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Inclusio — lista d’attesa</title>
+  <meta name="description" content="Inclusio aiuta persone, scuole e community a creare appartenenza reale con gruppi curati, introduzioni guidate e percorsi sociali più semplici." />
+  <script type="module" src="/src/main.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container nav-wrap">
+      <a class="brand" href="/">
+        <span class="brand-mark"><img src="/public/logo-square.svg" alt="Logo Inclusio con due braccia piegate che uniscono le mani" /></span>
+        <span class="brand-text">Inclusio<small>connessioni che fanno bene</small></span>
+      </a>
+      <nav class="nav"><a href="/" class="is-active">Home</a>
+<a href="/funzioni" class="">Funzioni</a>
+<a href="/impatto" class="">Impatto</a>
+<a href="/prezzi" class="">Prezzi</a>
+<a href="/piattaforma" class="">Piattaforma</a>
+<a href="/organizzazioni" class="">Organizzazioni</a></nav>
+      <div class="actions">
+        <a class="btn btn-secondary" href="/lista-attesa">Lista d’attesa</a>
+        <a class="btn btn-primary" href="/prezzi">Inizia</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="container hero-grid">
+        <div class="hero-copy">
+          <div class="kicker">Inclusio</div>
+          <h1>Entra nella lista d’attesa e ricevi gli aggiornamenti quando apriamo l’accesso.</h1>
+          <p class="lead">Questa pagina serve a raccogliere domanda reale e a trasformare il traffico in utenti o lead qualificati.</p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="/prezzi">Scopri i piani</a>
+            <a class="btn btn-secondary" href="/organizzazioni">Sei una scuola?</a>
+          </div>
+        </div>
+        <div class="hero-card">
+          <div class="logo-stage">
+            <img src="/public/logo-square.svg" alt="Logo quadrato Inclusio con due braccia piegate e mani che si incontrano" />
+          </div>
+        </div>
+      </div>
+    </section>
+
+    
+    <section class="section">
+      <div class="container card form-card">
+        <form id="waitlist-form" class="form-grid">
+          <div class="field"><label for="wait-name">Nome</label><input id="wait-name" name="name" required /></div>
+          <div class="field"><label for="wait-email">Email</label><input id="wait-email" name="email" type="email" required /></div>
+          <div class="field"><label for="role">Chi sei</label>
+            <select id="role" name="role">
+              <option value="individual">Persona singola</option>
+              <option value="student">Studente</option>
+              <option value="community-builder">Community builder</option>
+              <option value="hr-manager">HR / manager</option>
+            </select>
+          </div>
+          <div class="field"><label for="goal">Cosa cerchi</label>
+            <select id="goal" name="goal">
+              <option value="friendship">Nuove amicizie</option>
+              <option value="groups">Entrare in gruppi già avviati</option>
+              <option value="small-events">Eventi piccoli e guidati</option>
+              <option value="belonging-tools">Strumenti di appartenenza per team/community</option>
+            </select>
+          </div>
+          <div class="field full"><button class="btn btn-primary" type="submit" data-label="Iscrivimi">Iscrivimi</button></div>
+        </form>
+        <div id="waitlist-result" class="success-box"></div>
+      </div>
+    </section>
+    
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-grid">
+      <div>
+        <strong>Inclusio</strong><br />
+        <span>Appartenenza concreta per persone, scuole e community.</span>
+      </div>
+      <div class="muted-links">
+        <a href="/funzioni">Funzioni</a>
+        <a href="/prezzi">Prezzi</a>
+        <a href="/organizzazioni">Organizzazioni</a>
+        <a href="/lista-attesa">Lista d’attesa</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>
