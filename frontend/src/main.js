@@ -383,14 +383,31 @@ async function refreshBootstrap() {
 }
 
 async function loadUser(userId) {
-  const summary = await api(`/api/users/${encodeURIComponent(userId)}`);
-  state.userId = userId;
-  localStorage.setItem('inclusio_user_id', userId);
-  state.summary = summary;
-  const insights = await api('/api/insights');
-  state.insights = insights;
-  renderTopMetrics();
-  renderSummary();
+  try {
+    const summary = await api(`/api/users/${encodeURIComponent(userId)}`);
+    state.userId = userId;
+    localStorage.setItem('inclusio_user_id', userId);
+    state.summary = summary;
+
+    const insights = await api('/api/insights');
+    state.insights = insights;
+
+    renderTopMetrics();
+    renderSummary();
+  } catch (error) {
+    if (/Profilo non trovato/i.test(error.message)) {
+      state.userId = '';
+      state.summary = null;
+      localStorage.removeItem('inclusio_user_id');
+
+      await refreshBootstrap();
+      renderSummary();
+      showToast('Il profilo salvato non esiste più. Selezionane o creane uno nuovo.');
+      return;
+    }
+
+    throw error;
+  }
 }
 
 async function handleOnboarding(event) {
@@ -606,13 +623,7 @@ async function bootstrap() {
       await loadUser(state.userId);
     }
   } catch (error) {
-    console.error('Bootstrap error:', error, 'API_BASE=', API_BASE);
-    showToast(
-      API_BASE
-        ? 'Impossibile collegarsi al backend. Controlla CORS, URL e deploy.'
-        : 'Configurazione mancante su Vercel: VITE_API_BASE_URL.',
-      'error'
-    );
+    showToast(error?.message || 'Errore durante il caricamento iniziale.', 'error');
   }
 }
 
