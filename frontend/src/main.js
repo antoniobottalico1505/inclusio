@@ -1,7 +1,44 @@
 import './styles.css';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+const STRIPE_PLUS_MONTHLY = import.meta.env.VITE_STRIPE_LINK_PLUS_MONTHLY || '';
+const STRIPE_PLUS_ANNUAL = import.meta.env.VITE_STRIPE_LINK_PLUS_ANNUAL || '';
+
 const $ = (selector) => document.querySelector(selector);
+
+function setLink(node, href, fallback = '/lista-attesa') {
+  if (!node) return;
+  node.href = href || fallback;
+}
+
+function setText(node, text) {
+  if (!node) return;
+  node.textContent = text;
+}
+
+function wireStripeButtons() {
+  const monthlyBtn = $('#plus-monthly-btn');
+  const annualBtn = $('#plus-annual-btn');
+  const monthlyNote = $('#plus-monthly-note');
+  const annualNote = $('#plus-annual-note');
+
+  setLink(monthlyBtn, STRIPE_PLUS_MONTHLY);
+  setLink(annualBtn, STRIPE_PLUS_ANNUAL);
+
+  setText(
+    monthlyNote,
+    STRIPE_PLUS_MONTHLY
+      ? 'Pagamento mensile con Stripe.'
+      : 'Link Stripe mensile non configurato: reindirizzamento alla lista d’attesa.'
+  );
+
+  setText(
+    annualNote,
+    STRIPE_PLUS_ANNUAL
+      ? 'Pagamento annuale con Stripe.'
+      : 'Link Stripe annuale non configurato: reindirizzamento alla lista d’attesa.'
+  );
+}
 
 async function sendJson(path, body) {
   if (!API_BASE) {
@@ -144,6 +181,7 @@ function wireSchoolCheckout() {
   });
 }
 
+wireStripeButtons();
 wireForm('#waitlist-form', '/api/waitlist', '#waitlist-result');
 wireForm('#partner-form', '/api/partner-leads', '#partner-result');
 wireSchoolCheckout();
