@@ -1,35 +1,25 @@
 const nodemailer = require('nodemailer');
 const Stripe = require('stripe');
 const express = require('express');
-
 const path = require('path');
-
 const fs = require('fs');
 
 const app = express();
 
 const PORT = Number(process.env.PORT || 3000);
-
 const HOST = '0.0.0.0';
 
 const DB_PATH = path.join(__dirname, 'data', 'db.json');
-
 const SEED_PATH = path.join(__dirname, 'data', 'seed.json');
 
 const OWNER_EMAIL = process.env.OWNER_EMAIL || '';
-
 const GMAIL_USER = process.env.GMAIL_USER || '';
-
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || '';
 const APP_BASE_URL = process.env.APP_BASE_URL || '';
 
 const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
-
 const SMTP_PORT = Number(process.env.SMTP_PORT || 465);
-
 const SMTP_SECURE = String(process.env.SMTP_SECURE || 'true') === 'true';
-
-const BILLING_ADMIN_TOKEN = process.env.BILLING_ADMIN_TOKEN || '';
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
@@ -84,7 +74,7 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
               <h2>Pagamento scuola completato</h2>
               <p><strong>Organizzazione:</strong> ${esc(organization || 'Non indicata')}</p>
               <p><strong>Email fatturazione:</strong> ${esc(customerEmail)}</p>
-              <p><strong>Piano:</strong> ${esc(getPlanLabel(planCode))}</p>
+              <p><strong>Piano:</strong> ${esc(activated.planLabel)}</p>
               <p><strong>Dimensione:</strong> ${esc(schoolSize || 'Non indicata')}</p>
               <p><strong>Subscription ID:</strong> ${esc(session.subscription || 'n/d')}</p>
             `
@@ -98,7 +88,7 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
               <p>il pagamento per <strong>${esc(organization || 'la tua organizzazione')}</strong> è stato registrato correttamente.</p>
               <p><strong>Piano attivo:</strong> ${esc(activated.planLabel)}</p>
               <p><strong>Fascia dimensionale:</strong> ${esc(schoolSize || 'Non indicata')}</p>
-              <p><a href="${APP_BASE_URL}/organizzazioni">Torna alla pagina scuole</a></p>
+              <p><a href="${APP_BASE_URL || '#'}">Vai al sito</a></p>
             `
           })
         ]);
@@ -125,7 +115,6 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
 });
 
 app.use(express.json({ limit: '1mb' }));
-
 app.use(express.urlencoded({ extended: true }));
 
 const allowedOrigins = (process.env.CORS_ORIGIN || '')
@@ -168,13 +157,10 @@ function baseDbShape() {
     checkins: [],
     reports: [],
     waitlist: [],
-partnerLeads: [],
-
-subscriptions: [],
-
-organizations: [],
-
-marketing: {
+    partnerLeads: [],
+    subscriptions: [],
+    organizations: [],
+    marketing: {
       plans: [],
       faqs: []
     }
@@ -183,6 +169,7 @@ marketing: {
 
 function normalizeDb(raw) {
   const base = baseDbShape();
+
   const db = {
     ...base,
     ...(raw || {}),
@@ -199,23 +186,18 @@ function normalizeDb(raw) {
   db.reports = Array.isArray(db.reports) ? db.reports : [];
   db.waitlist = Array.isArray(db.waitlist) ? db.waitlist : [];
   db.partnerLeads = Array.isArray(db.partnerLeads) ? db.partnerLeads : [];
-
-db.subscriptions = Array.isArray(db.subscriptions) ? db.subscriptions : [];
-
-db.organizations = Array.isArray(db.organizations) ? db.organizations : [];
-
-db.marketing.plans = Array.isArray(db.marketing.plans) ? db.marketing.plans : [];
+  db.subscriptions = Array.isArray(db.subscriptions) ? db.subscriptions : [];
+  db.organizations = Array.isArray(db.organizations) ? db.organizations : [];
+  db.marketing.plans = Array.isArray(db.marketing.plans) ? db.marketing.plans : [];
   db.marketing.faqs = Array.isArray(db.marketing.faqs) ? db.marketing.faqs : [];
 
   db.groups = db.groups.map((group) => ({
     ...group,
-    premiumOnly: Boolean(group.premiumOnly),
     tags: Array.isArray(group.tags) ? group.tags : [],
     members: Array.isArray(group.members) ? group.members : [],
     activities: Array.isArray(group.activities)
       ? group.activities.map((activity) => ({
           ...activity,
-          premiumOnly: Boolean(activity.premiumOnly),
           rsvps: Array.isArray(activity.rsvps) ? activity.rsvps : []
         }))
       : []
@@ -223,19 +205,9 @@ db.marketing.plans = Array.isArray(db.marketing.plans) ? db.marketing.plans : []
 
   db.users = db.users.map((user) => ({
     ...user,
-    email: email(user.email),
-    planCode: normalizePlanCode(user.planCode || user.plan),
     interests: Array.isArray(user.interests) ? user.interests : [],
     goals: Array.isArray(user.goals) ? user.goals : [],
     joinedGroupIds: Array.isArray(user.joinedGroupIds) ? user.joinedGroupIds : []
-  }));
-
-  db.subscriptions = db.subscriptions.map((subscription) => ({
-    ...subscription,
-    email: email(subscription.email),
-    planCode: normalizePlanCode(subscription.planCode || subscription.plan),
-    status: text(subscription.status || 'active', 20) || 'active',
-    source: text(subscription.source || 'manual', 30) || 'manual'
   }));
 
   return db;
@@ -295,16 +267,14 @@ function esc(value) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+    .replace(/'/g, '&#39;');
 }
-
 
 function normalizePlanCode(value) {
   const code = String(value || '').trim().toLowerCase();
 
   if (['plus', 'plus_monthly', 'monthly', 'mensile'].includes(code)) return 'plus_monthly';
   if (['plus_annual', 'annual', 'annuale'].includes(code)) return 'plus_annual';
-
   if (['school_starter', 'starter', 'scuola_starter'].includes(code)) return 'school_starter';
   if (['school_pro', 'pro', 'scuola_pro'].includes(code)) return 'school_pro';
   if (['custom', 'enterprise', 'campus', 'school_enterprise'].includes(code)) return 'custom';
@@ -333,14 +303,10 @@ function getPlanEntitlements(planCode = 'solo') {
       planLabel: getPlanLabel(normalized),
       isPaid: true,
       isB2B: true,
-      maxGroups: 999,
-      buddyMatches: 999,
+      orgDashboard: true,
+      advancedInsights: true,
       premiumGroups: true,
       premiumActivities: true,
-      advancedInsights: true,
-      priorityIntroductions: true,
-      supportLevel: 'priority',
-      orgDashboard: true,
       exports: false,
       multiCampus: false,
       schoolSizeBand: 'fino a 400 studenti'
@@ -353,14 +319,10 @@ function getPlanEntitlements(planCode = 'solo') {
       planLabel: getPlanLabel(normalized),
       isPaid: true,
       isB2B: true,
-      maxGroups: 999,
-      buddyMatches: 999,
+      orgDashboard: true,
+      advancedInsights: true,
       premiumGroups: true,
       premiumActivities: true,
-      advancedInsights: true,
-      priorityIntroductions: true,
-      supportLevel: 'priority',
-      orgDashboard: true,
       exports: true,
       multiCampus: true,
       schoolSizeBand: 'da 401 a 1.200 studenti'
@@ -373,14 +335,10 @@ function getPlanEntitlements(planCode = 'solo') {
       planLabel: getPlanLabel(normalized),
       isPaid: true,
       isB2B: true,
-      maxGroups: 999,
-      buddyMatches: 999,
+      orgDashboard: true,
+      advancedInsights: true,
       premiumGroups: true,
       premiumActivities: true,
-      advancedInsights: true,
-      priorityIntroductions: true,
-      supportLevel: 'enterprise',
-      orgDashboard: true,
       exports: true,
       multiCampus: true,
       schoolSizeBand: 'oltre 1.200 studenti / multisede'
@@ -394,14 +352,10 @@ function getPlanEntitlements(planCode = 'solo') {
     planLabel: getPlanLabel(normalized),
     isPaid,
     isB2B: false,
-    maxGroups: isPaid ? 3 : 1,
-    buddyMatches: isPaid ? 3 : 1,
+    orgDashboard: false,
+    advancedInsights: isPaid,
     premiumGroups: isPaid,
     premiumActivities: isPaid,
-    advancedInsights: isPaid,
-    priorityIntroductions: isPaid,
-    supportLevel: isPaid ? 'priority' : 'base',
-    orgDashboard: false,
     exports: false,
     multiCampus: false,
     schoolSizeBand: null
@@ -425,9 +379,6 @@ function activateSubscriptionRecord(db, payload) {
   if (!isValidEmail(emailValue)) {
     throw new Error('Email di fatturazione non valida.');
   }
-
-  if (!Array.isArray(db.subscriptions)) db.subscriptions = [];
-  if (!Array.isArray(db.organizations)) db.organizations = [];
 
   db.subscriptions.forEach((item) => {
     if (
@@ -460,7 +411,9 @@ function activateSubscriptionRecord(db, payload) {
 
   if (['school_starter', 'school_pro', 'custom'].includes(planCode)) {
     const orgKey = slugify(payload.organization || emailValue);
-    const current = db.organizations.find((item) => slugify(item.name || item.billingEmail) === orgKey);
+    const current = db.organizations.find(
+      (item) => slugify(item.name || item.billingEmail) === orgKey
+    );
 
     if (current) {
       current.name = text(payload.organization, 120) || current.name;
@@ -493,8 +446,6 @@ function activateSubscriptionRecord(db, payload) {
 }
 
 function deactivateSubscriptionRecord(db, payload) {
-  if (!Array.isArray(db.subscriptions)) return;
-
   const subscriptionId = text(payload.stripeSubscriptionId, 80);
   const nextStatus = text(payload.status, 20) || 'canceled';
   const now = new Date().toISOString();
@@ -506,47 +457,26 @@ function deactivateSubscriptionRecord(db, payload) {
     }
   });
 
-  if (Array.isArray(db.organizations)) {
-    db.organizations.forEach((item) => {
-      if (subscriptionId && text(item.stripeSubscriptionId, 80) === subscriptionId) {
-        item.status = nextStatus;
-        item.deactivatedAt = now;
-      }
-    });
-  }
+  db.organizations.forEach((item) => {
+    if (subscriptionId && text(item.stripeSubscriptionId, 80) === subscriptionId) {
+      item.status = nextStatus;
+      item.deactivatedAt = now;
+    }
+  });
 }
 
-function getActiveSubscriptionByEmail(db, emailValue) {
-  const normalizedEmail = email(emailValue);
-  if (!normalizedEmail || !Array.isArray(db.subscriptions)) return null;
+function getActiveSubscription(db, criteria = {}) {
+  const wantedEmail = email(criteria.email);
+  const wantedOrg = slugify(criteria.organization || '');
 
-  return (
-    db.subscriptions.find((subscription) => {
-      if (email(subscription.email) !== normalizedEmail) return false;
-      if (String(subscription.status || '').toLowerCase() !== 'active') return false;
-      return normalizePlanCode(subscription.planCode || subscription.plan) !== 'solo';
-    }) || null
-  );
-}
-
-function getPlanCodeForEmail(db, emailValue) {
-  const activeSubscription = getActiveSubscriptionByEmail(db, emailValue);
-  return activeSubscription ? normalizePlanCode(activeSubscription.planCode || activeSubscription.plan) : 'solo';
-}
-
-function getUserPlanCode(db, user) {
-  if (!user) return 'solo';
-
-  if (user.email) {
-    const subscriptionPlan = getPlanCodeForEmail(db, user.email);
-    if (subscriptionPlan !== 'solo') return subscriptionPlan;
-  }
-
-  return normalizePlanCode(user.planCode || user.plan);
-}
-
-function getUserEntitlements(db, user) {
-  return getPlanEntitlements(getUserPlanCode(db, user));
+  return [...db.subscriptions]
+    .filter((item) => String(item.status || '').toLowerCase() === 'active')
+    .filter((item) => {
+      const emailMatch = wantedEmail ? email(item.email) === wantedEmail : true;
+      const orgMatch = wantedOrg ? slugify(item.organization || '') === wantedOrg : true;
+      return emailMatch && orgMatch;
+    })
+    .sort((a, b) => new Date(b.activatedAt || b.createdAt || 0) - new Date(a.activatedAt || a.createdAt || 0))[0] || null;
 }
 
 function getUserById(db, userId) {
@@ -579,25 +509,12 @@ function getGroupMemberProfiles(db, group) {
 }
 
 function serializeGroup(db, group, currentUserId = null) {
-  const currentUser = currentUserId ? getUserById(db, currentUserId) : null;
-  const entitlements = currentUser ? getUserEntitlements(db, currentUser) : getPlanEntitlements('solo');
-
   return {
     ...group,
-    premiumOnly: Boolean(group.premiumOnly),
-    lockedByPlan: Boolean(group.premiumOnly) && !entitlements.premiumGroups,
-    lockedReason: Boolean(group.premiumOnly) && !entitlements.premiumGroups ? 'Disponibile con Plus.' : null,
     memberCount: (group.members || []).length,
     spotsLeft: Math.max(Number(group.sizeLimit || 0) - (group.members || []).length, 0),
     isJoined: currentUserId ? (group.members || []).includes(currentUserId) : false,
-    membersPreview: getGroupMemberProfiles(db, group),
-    activities: (group.activities || []).map((activity) => ({
-      ...activity,
-      premiumOnly: Boolean(activity.premiumOnly),
-      lockedByPlan: Boolean(activity.premiumOnly) && !entitlements.premiumActivities,
-      lockedReason: Boolean(activity.premiumOnly) && !entitlements.premiumActivities ? 'Disponibile con Plus.' : null,
-      isRsvped: currentUserId ? (activity.rsvps || []).includes(currentUserId) : false
-    }))
+    membersPreview: getGroupMemberProfiles(db, group)
   };
 }
 
@@ -608,47 +525,59 @@ function scoreGroupForUser(group, user) {
   const comfortGap = Math.abs((group.targetComfort || 3) - (user.comfort || 3));
   const energyGap = Math.abs((group.energy || 3) - (user.energy || 3));
   const spaceBonus = (group.members || []).length < Number(group.sizeLimit || 0) ? 1 : -2;
-  const opennessBonus = (group.members || []).length <= Math.max(2, Math.floor(Number(group.sizeLimit || 0) / 2)) ? 0.8 : 0.25;
+  const opennessBonus =
+    (group.members || []).length <= Math.max(2, Math.floor(Number(group.sizeLimit || 0) / 2))
+      ? 0.8
+      : 0.25;
 
-  return Number((commonInterests * 3 - comfortGap * 1.1 - energyGap * 0.7 + spaceBonus + opennessBonus).toFixed(2));
+  return Number(
+    (commonInterests * 3 - comfortGap * 1.1 - energyGap * 0.7 + spaceBonus + opennessBonus).toFixed(2)
+  );
 }
 
 function recommendGroups(db, userId) {
   const user = getUserById(db, userId);
   if (!user) return [];
 
-  const entitlements = getUserEntitlements(db, user);
-
   return db.groups
-    .filter((group) => {
-      if ((group.members || []).includes(userId)) return false;
-      if ((group.members || []).length >= Number(group.sizeLimit || 0)) return false;
-      if (group.premiumOnly && !entitlements.premiumGroups) return false;
-      return true;
-    })
+    .filter(
+      (group) =>
+        !(group.members || []).includes(userId) &&
+        (group.members || []).length < Number(group.sizeLimit || 0)
+    )
     .map((group) => ({
       ...serializeGroup(db, group, userId),
       matchScore: scoreGroupForUser(group, user),
       matchReasons: unique([
-        (group.tags || []).some((tag) => (user.interests || []).includes(tag)) ? 'Interessi in comune' : null,
-        Math.abs((group.targetComfort || 3) - (user.comfort || 3)) <= 1 ? 'Comfort compatibile' : null,
-        Math.abs((group.energy || 3) - (user.energy || 3)) <= 1 ? 'Ritmo sociale adatto' : null,
-        (group.members || []).length <= Math.max(2, Math.floor(Number(group.sizeLimit || 0) / 2)) ? 'Gruppo aperto a nuovi ingressi' : null
+        (group.tags || []).some((tag) => (user.interests || []).includes(tag))
+          ? 'Interessi in comune'
+          : null,
+        Math.abs((group.targetComfort || 3) - (user.comfort || 3)) <= 1
+          ? 'Comfort compatibile'
+          : null,
+        Math.abs((group.energy || 3) - (user.energy || 3)) <= 1
+          ? 'Ritmo sociale adatto'
+          : null,
+        (group.members || []).length <= Math.max(2, Math.floor(Number(group.sizeLimit || 0) / 2))
+          ? 'Gruppo aperto a nuovi ingressi'
+          : null
       ])
     }))
     .sort((a, b) => b.matchScore - a.matchScore)
-    .slice(0, entitlements.isPaid ? 6 : 4);
+    .slice(0, 6);
 }
 
-function recommendBuddies(db, userId, limit = 1) {
+function recommendBuddy(db, userId) {
   const user = getUserById(db, userId);
-  if (!user) return [];
+  if (!user) return null;
 
-  return db.users
+  const candidates = db.users
     .filter((candidate) => candidate.id !== userId && candidate.buddyEligible)
     .map((candidate) => {
       const candidateInterests = Array.isArray(candidate.interests) ? candidate.interests : [];
-      const sharedInterests = candidateInterests.filter((interest) => (user.interests || []).includes(interest));
+      const sharedInterests = candidateInterests.filter((interest) =>
+        (user.interests || []).includes(interest)
+      );
       const comfortGap = Math.abs((candidate.comfort || 3) - (user.comfort || 3));
       const score = sharedInterests.length * 3 + (candidate.mentor ? 1.5 : 0) - comfortGap;
 
@@ -663,12 +592,9 @@ function recommendBuddies(db, userId, limit = 1) {
         score
       };
     })
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit);
-}
+    .sort((a, b) => b.score - a.score);
 
-function recommendBuddy(db, userId) {
-  return recommendBuddies(db, userId, 1)[0] || null;
+  return candidates[0] || null;
 }
 
 function computeActionPlan(summary) {
@@ -676,52 +602,51 @@ function computeActionPlan(summary) {
 
   const actions = [];
 
-  if (!summary.myGroups.length) actions.push('Entra in un primo cerchio consigliato con pochi membri.');
-  if (summary.stats.plannedActivities === 0) actions.push('Prenota una micro-attività guidata per rompere il ghiaccio in modo semplice.');
-  if (summary.buddy) actions.push(`Scrivi al buddy suggerito: ${summary.buddy.name}.`);
-  if (summary.stats.recentAnxietyAverage >= 3) actions.push('Scegli gruppi con comfort basso o medio e attività strutturate.');
-  if (summary.stats.recentInclusionAverage <= 3) actions.push('Fai un check-in dopo il prossimo incontro per migliorare i suggerimenti.');
+  if (!summary.myGroups.length) {
+    actions.push('Entra in un primo cerchio consigliato con pochi membri.');
+  }
+
+  if (summary.stats.plannedActivities === 0) {
+    actions.push('Prenota una micro-attività guidata per rompere il ghiaccio in modo semplice.');
+  }
+
+  if (summary.buddy) {
+    actions.push(`Scrivi al buddy suggerito: ${summary.buddy.name}.`);
+  }
+
+  if (summary.stats.recentAnxietyAverage >= 3) {
+    actions.push('Scegli gruppi con comfort basso o medio e attività strutturate.');
+  }
+
+  if (summary.stats.recentInclusionAverage <= 3) {
+    actions.push('Fai un check-in dopo il prossimo incontro per migliorare i suggerimenti.');
+  }
 
   return unique(actions).slice(0, 4);
-}
-
-
-function computeAdvancedInsights(summary) {
-  if (!summary) return null;
-
-  const stabilityBase = 100 - summary.stats.recentAnxietyAverage * 12 + summary.stats.recentInclusionAverage * 7;
-  const momentumBase = summary.stats.belongingScore + summary.stats.plannedActivities * 4 + summary.stats.joinedGroups * 3;
-
-  return {
-    momentumScore: clamp(Math.round(momentumBase), 0, 100),
-    socialStabilityScore: clamp(Math.round(stabilityBase), 0, 100),
-    nextBestAction: summary.actionPlan[0] || 'Continua con un gruppo coerente con il tuo ritmo.',
-    unlockHint: summary.account?.isPaid ? null : 'Con Plus sblocchi gruppi premium, più buddy match e insight avanzati.'
-  };
 }
 
 function computeUserSummary(db, userId) {
   const user = getUserById(db, userId);
   if (!user) return null;
 
-  const entitlements = getUserEntitlements(db, user);
   const myGroups = db.groups.filter((group) => (group.members || []).includes(userId));
   const checkins = getUserCheckins(db, userId);
   const recentCheckins = checkins.slice(0, 5);
+
   const reports = getUserReports(db, userId).map((report) => ({
     ...report,
     statusLabel:
-      report.status === 'reviewing'
-        ? 'In revisione'
-        : report.status === 'resolved'
-          ? 'Risolta'
-          : 'Aperta'
+      report.status === 'reviewing' ? 'In revisione' : report.status === 'resolved' ? 'Risolta' : 'Aperta'
   }));
 
   const belongingAvg = avg(recentCheckins.map((item) => item.included || 0));
   const anxietyAvg = avg(recentCheckins.map((item) => item.anxiety || 0));
+
   const activityCount = myGroups.reduce((sum, group) => {
-    return sum + (group.activities || []).filter((activity) => (activity.rsvps || []).includes(userId)).length;
+    return (
+      sum +
+      (group.activities || []).filter((activity) => (activity.rsvps || []).includes(userId)).length
+    );
   }, 0);
 
   const stats = {
@@ -739,40 +664,19 @@ function computeUserSummary(db, userId) {
     reportsOpen: reports.filter((report) => report.status !== 'resolved').length
   };
 
-  const buddyMatches = recommendBuddies(db, userId, entitlements.buddyMatches);
-
   const summary = {
     user,
-    account: {
-      email: user.email || '',
-      planCode: entitlements.planCode,
-      planLabel: entitlements.planLabel,
-      isPaid: entitlements.isPaid,
-      entitlements
-    },
     stats,
     myGroups: myGroups.map((group) => serializeGroup(db, group, userId)),
     recommendations: recommendGroups(db, userId),
-    buddy: buddyMatches[0] || null,
-    buddyMatches,
+    buddy: recommendBuddy(db, userId),
     checkins,
     reports
   };
 
-  const actionPlan = computeActionPlan(summary);
-
   return {
     ...summary,
-    actionPlan: entitlements.advancedInsights ? actionPlan : actionPlan.slice(0, 2),
-    advancedInsights: entitlements.advancedInsights ? computeAdvancedInsights({ ...summary, actionPlan }) : null,
-    lockedFeatures: entitlements.isPaid
-      ? []
-      : [
-          'Fino a 3 gruppi attivi',
-          'Fino a 3 buddy match',
-          'Gruppi e attività premium',
-          'Insight personali avanzati'
-        ]
+    actionPlan: computeActionPlan(summary)
   };
 }
 
@@ -790,7 +694,9 @@ function computeInsights(db) {
     .map((group) => ({
       id: group.id,
       name: group.name,
-      fillRate: Number((((group.members || []).length / Math.max(Number(group.sizeLimit || 1), 1))).toFixed(2)),
+      fillRate: Number(
+        ((group.members || []).length / Math.max(Number(group.sizeLimit || 1), 1)).toFixed(2)
+      ),
       spotsLeft: Math.max(Number(group.sizeLimit || 0) - (group.members || []).length, 0)
     }))
     .sort((a, b) => a.spotsLeft - b.spotsLeft);
@@ -802,10 +708,13 @@ function computeInsights(db) {
     averageInclusion: Number(avg(includedValues).toFixed(1)),
     averageAnxiety: Number(avg(anxietyValues).toFixed(1)),
     openReports: db.reports.filter((report) => report.status !== 'resolved').length,
-    waitlistCount: (db.waitlist || []).length,
-    partnerLeadsCount: (db.partnerLeads || []).length,
-    activeSubscriptions: (db.subscriptions || []).filter((item) => String(item.status || '').toLowerCase() === 'active').length,
-    lonelyUsers: lonelyUsers.map((user) => ({ id: user.id, name: user.name, city: user.city })),
+    waitlistCount: db.waitlist.length,
+    partnerLeadsCount: db.partnerLeads.length,
+    lonelyUsers: lonelyUsers.map((user) => ({
+      id: user.id,
+      name: user.name,
+      city: user.city
+    })),
     closedGroups,
     reportsByCategory: db.reports.reduce((acc, report) => {
       const category = report.category || 'altro';
@@ -819,10 +728,6 @@ function getMarketing(db) {
   return {
     plans: db.marketing?.plans || [],
     faqs: db.marketing?.faqs || [],
-    serviceMatrix: {
-      solo: getPlanEntitlements('solo'),
-      plus: getPlanEntitlements('plus_monthly')
-    },
     demoUsers: db.users.slice(0, 4).map((user) => ({
       id: user.id,
       name: user.name,
@@ -834,7 +739,10 @@ function getMarketing(db) {
 const mailTransport =
   nodemailer && GMAIL_USER && GMAIL_APP_PASSWORD
     ? nodemailer.createTransport({
-        service: 'gmail',
+        host: SMTP_HOST,
+        port: SMTP_PORT,
+        secure: SMTP_SECURE,
+        service: SMTP_HOST === 'smtp.gmail.com' ? 'gmail' : undefined,
         auth: {
           user: GMAIL_USER,
           pass: GMAIL_APP_PASSWORD
@@ -844,7 +752,6 @@ const mailTransport =
 
 async function sendEmail({ to, subject, html }) {
   if (!mailTransport || !to) return;
-
   await mailTransport.sendMail({
     from: GMAIL_USER,
     to,
@@ -865,43 +772,154 @@ app.get('/', (req, res) => {
   res.status(200).json({
     ok: true,
     service: 'inclusio-api',
-    message: 'Backend attivo. Il frontend pubblico è pensato per Vercel.',
-    endpoints: ['/api/health', '/api/bootstrap', '/api/users/onboard', '/api/waitlist', '/api/partner-leads', '/api/subscriptions/lookup', '/api/subscriptions/activate']
+    message: "Backend attivo. Il frontend pubblico è pensato per Vercel.",
+    endpoints: [
+      '/api/health',
+      '/api/bootstrap',
+      '/api/users/onboard',
+      '/api/waitlist',
+      '/api/partner-leads',
+      '/api/billing/status',
+      '/api/billing/school-checkout',
+      '/api/stripe/webhook'
+    ]
   });
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, service: 'inclusio-api', now: new Date().toISOString() });
+  res.json({
+    ok: true,
+    service: 'inclusio-api',
+    now: new Date().toISOString()
+  });
 });
 
 app.get('/api/bootstrap', (req, res) => {
   const db = readDb();
   const userId = req.query.userId ? String(req.query.userId) : null;
-  const emailValue = req.query.email ? email(req.query.email) : '';
-  const previewPlanCode = emailValue ? getPlanCodeForEmail(db, emailValue) : 'solo';
 
   res.json({
     appName: 'Inclusio',
     interests: db.interests,
     summary: userId ? computeUserSummary(db, userId) : null,
     insights: computeInsights(db),
-    marketing: getMarketing(db),
-    billingPreview: emailValue
-      ? {
-          email: emailValue,
-          planCode: previewPlanCode,
-          planLabel: getPlanLabel(previewPlanCode),
-          entitlements: getPlanEntitlements(previewPlanCode)
-        }
-      : null
+    marketing: getMarketing(db)
   });
+});
+
+app.get('/api/billing/status', (req, res) => {
+  const db = readDb();
+  const emailValue = email(req.query.email || '');
+  const organization = text(req.query.organization, 120);
+
+  if (!emailValue && !organization) {
+    return res.status(400).json({
+      error: 'Passa almeno email o organization.'
+    });
+  }
+
+  const subscription = getActiveSubscription(db, {
+    email: emailValue,
+    organization
+  });
+
+  if (!subscription) {
+    return res.json({
+      ok: true,
+      active: false,
+      subscription: null
+    });
+  }
+
+  return res.json({
+    ok: true,
+    active: true,
+    subscription: {
+      ...subscription,
+      entitlements: getPlanEntitlements(subscription.planCode)
+    }
+  });
+});
+
+app.post('/api/billing/school-checkout', async (req, res) => {
+  if (!stripe) {
+    return res.status(500).json({ error: 'Stripe non configurato sul backend.' });
+  }
+
+  if (!APP_BASE_URL) {
+    return res.status(500).json({ error: 'APP_BASE_URL non configurato sul backend.' });
+  }
+
+  const organization = text(req.body.organization, 120);
+  const billingEmail = email(req.body.billingEmail || req.body.email);
+  const contactName = text(req.body.contactName || req.body.name, 80);
+  const schoolSize = text(req.body.schoolSize, 40);
+  const planCode = normalizePlanCode(req.body.planCode);
+
+  if (!organization || !isValidEmail(billingEmail)) {
+    return res.status(400).json({
+      error: 'Inserisci nome scuola ed email di fatturazione validi.'
+    });
+  }
+
+  if (!['school_starter', 'school_pro'].includes(planCode)) {
+    return res.status(400).json({
+      error: 'Per questa fascia è necessario usare Starter o Pro.'
+    });
+  }
+
+  const priceId = getSchoolPriceId(planCode);
+
+  if (!priceId) {
+    return res.status(500).json({
+      error: 'Prezzo Stripe del piano scuola non configurato.'
+    });
+  }
+
+  try {
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      customer_email: billingEmail,
+      billing_address_collection: 'required',
+      tax_id_collection: { enabled: true },
+      allow_promotion_codes: true,
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: `${APP_BASE_URL}/organizzazioni?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${APP_BASE_URL}/organizzazioni?checkout=cancelled`,
+      metadata: {
+        planCode,
+        organization,
+        billingEmail,
+        contactName,
+        schoolSize
+      },
+      subscription_data: {
+        metadata: {
+          planCode,
+          organization,
+          billingEmail,
+          contactName,
+          schoolSize
+        }
+      }
+    });
+
+    return res.json({
+      ok: true,
+      url: session.url
+    });
+  } catch (error) {
+    console.error('School checkout create failed:', error);
+    return res.status(500).json({
+      error: 'Impossibile creare il checkout Stripe.'
+    });
+  }
 });
 
 app.post('/api/users/onboard', (req, res) => {
   const db = readDb();
 
   const name = text(req.body.name, 40);
-  const emailValue = email(req.body.email);
   const city = text(req.body.city, 40) || 'Online';
   const comfort = clamp(Number(req.body.comfort || 3), 1, 5);
   const energy = clamp(Number(req.body.energy || 3), 1, 5);
@@ -917,19 +935,9 @@ app.post('/api/users/onboard', (req, res) => {
     return res.status(400).json({ error: 'Il nome è obbligatorio.' });
   }
 
-  if (req.body.email && !isValidEmail(emailValue)) {
-    return res.status(400).json({ error: 'Inserisci un indirizzo email valido.' });
-  }
-
-  if (emailValue && db.users.find((item) => item.email === emailValue)) {
-    return res.status(409).json({ error: 'Esiste già un profilo associato a questa email.' });
-  }
-
   const user = {
     id: `u-${slugify(name)}-${Math.random().toString(36).slice(2, 6)}`,
     name,
-    email: emailValue,
-    planCode: getPlanCodeForEmail(db, emailValue),
     city,
     interests,
     goals,
@@ -978,19 +986,10 @@ app.post('/api/groups/:groupId/join', (req, res) => {
     return res.status(404).json({ error: 'Gruppo o profilo non trovato.' });
   }
 
-  const entitlements = getUserEntitlements(db, user);
-
   if ((group.members || []).includes(userId)) {
-    return res.json({ summary: computeUserSummary(db, userId), message: 'Sei già in questo gruppo.' });
-  }
-
-  if (group.premiumOnly && !entitlements.premiumGroups) {
-    return res.status(403).json({ error: 'Questo gruppo è disponibile con Plus.' });
-  }
-
-  if ((user.joinedGroupIds || []).length >= entitlements.maxGroups) {
-    return res.status(403).json({
-      error: `Il piano ${entitlements.planLabel} consente fino a ${entitlements.maxGroups} gruppi attivi.`
+    return res.json({
+      summary: computeUserSummary(db, userId),
+      message: 'Sei già in questo gruppo.'
     });
   }
 
@@ -1000,9 +999,12 @@ app.post('/api/groups/:groupId/join', (req, res) => {
 
   group.members.push(userId);
   user.joinedGroupIds = unique([...(user.joinedGroupIds || []), group.id]);
-
   writeDb(db);
-  res.json({ summary: computeUserSummary(db, userId), message: 'Ingresso nel gruppo completato.' });
+
+  res.json({
+    summary: computeUserSummary(db, userId),
+    message: 'Ingresso nel gruppo completato.'
+  });
 });
 
 app.post('/api/groups/:groupId/leave', (req, res) => {
@@ -1023,7 +1025,11 @@ app.post('/api/groups/:groupId/leave', (req, res) => {
   });
 
   writeDb(db);
-  res.json({ summary: computeUserSummary(db, userId), message: 'Hai lasciato il gruppo.' });
+
+  res.json({
+    summary: computeUserSummary(db, userId),
+    message: 'Hai lasciato il gruppo.'
+  });
 });
 
 app.post('/api/groups/:groupId/activities/:activityId/rsvp', (req, res) => {
@@ -1046,12 +1052,6 @@ app.post('/api/groups/:groupId/activities/:activityId/rsvp', (req, res) => {
     return res.status(404).json({ error: 'Attività non trovata.' });
   }
 
-  const entitlements = getUserEntitlements(db, user);
-
-  if (activity.premiumOnly && !entitlements.premiumActivities) {
-    return res.status(403).json({ error: 'Questa attività è disponibile con Plus.' });
-  }
-
   if ((activity.rsvps || []).includes(userId)) {
     activity.rsvps = activity.rsvps.filter((id) => id !== userId);
   } else {
@@ -1059,7 +1059,11 @@ app.post('/api/groups/:groupId/activities/:activityId/rsvp', (req, res) => {
   }
 
   writeDb(db);
-  res.json({ summary: computeUserSummary(db, userId), message: 'Partecipazione aggiornata.' });
+
+  res.json({
+    summary: computeUserSummary(db, userId),
+    message: 'Partecipazione aggiornata.'
+  });
 });
 
 app.post('/api/checkins', (req, res) => {
@@ -1122,7 +1126,6 @@ app.post('/api/reports', (req, res) => {
 
 app.post('/api/waitlist', async (req, res) => {
   const db = readDb();
-
   const nameValue = text(req.body.name, 60);
   const emailValue = email(req.body.email);
   const role = text(req.body.role, 40) || 'individual';
@@ -1132,11 +1135,13 @@ app.post('/api/waitlist', async (req, res) => {
     return res.status(400).json({ error: 'Inserisci nome ed email validi.' });
   }
 
-  db.waitlist = db.waitlist || [];
   const existing = db.waitlist.find((item) => item.email === emailValue);
 
   if (existing) {
-    return res.json({ ok: true, message: "Questa email è già presente nella lista d'attesa." });
+    return res.json({
+      ok: true,
+      message: "Questa email è già presente nella lista d'attesa."
+    });
   }
 
   db.waitlist.unshift({
@@ -1156,10 +1161,10 @@ app.post('/api/waitlist', async (req, res) => {
       subject: `[Inclusio] Nuova iscrizione waitlist — ${nameValue}`,
       html: `
         <h2>Nuova iscrizione waitlist</h2>
-        <p><strong>Nome:</strong> ${nameValue}</p>
-        <p><strong>Email:</strong> ${emailValue}</p>
-        <p><strong>Ruolo:</strong> ${role}</p>
-        <p><strong>Goal:</strong> ${goal}</p>
+        <p><strong>Nome:</strong> ${esc(nameValue)}</p>
+        <p><strong>Email:</strong> ${esc(emailValue)}</p>
+        <p><strong>Ruolo:</strong> ${esc(role)}</p>
+        <p><strong>Goal:</strong> ${esc(goal)}</p>
       `
     }),
     safeSendEmail({
@@ -1167,9 +1172,9 @@ app.post('/api/waitlist', async (req, res) => {
       subject: 'Inclusio — iscrizione confermata',
       html: `
         <h2>Iscrizione confermata</h2>
-        <p>Ciao ${nameValue},</p>
+        <p>Ciao ${esc(nameValue)},</p>
         <p>abbiamo ricevuto la tua richiesta di accesso anticipato.</p>
-        <p><a href="${APP_BASE_URL}">Vai al sito</a></p>
+        <p><a href="${APP_BASE_URL || '#'}">Vai al sito</a></p>
       `
     })
   ]);
@@ -1180,84 +1185,14 @@ app.post('/api/waitlist', async (req, res) => {
   });
 });
 
-app.post('/api/billing/school-checkout', async (req, res) => {
-  if (!stripe) {
-    return res.status(500).json({ error: 'Stripe non configurato sul backend.' });
-  }
-
-  const organization = text(req.body.organization, 120);
-  const billingEmail = email(req.body.billingEmail || req.body.email);
-  const contactName = text(req.body.contactName || req.body.name, 80);
-  const schoolSize = text(req.body.schoolSize, 40);
-  const planCode = normalizePlanCode(req.body.planCode);
-
-  if (!organization || !isValidEmail(billingEmail)) {
-    return res.status(400).json({ error: 'Inserisci nome scuola ed email di fatturazione validi.' });
-  }
-
-  if (!['school_starter', 'school_pro'].includes(planCode)) {
-    return res.status(400).json({ error: 'Per questa fascia è necessario usare Starter o Pro.' });
-  }
-
-  const priceId = getSchoolPriceId(planCode);
-
-  if (!priceId) {
-    return res.status(500).json({ error: 'Prezzo Stripe del piano scuola non configurato.' });
-  }
-
-  try {
-    const session = await stripe.checkout.sessions.create({
-      mode: 'subscription',
-      customer_email: billingEmail,
-      billing_address_collection: 'required',
-      allow_promotion_codes: true,
-      tax_id_collection: { enabled: true },
-      line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${APP_BASE_URL}/organizzazioni?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${APP_BASE_URL}/organizzazioni?checkout=cancelled`,
-      metadata: {
-        planCode,
-        organization,
-        billingEmail,
-        contactName,
-        schoolSize
-      },
-      subscription_data: {
-        metadata: {
-          planCode,
-          organization,
-          billingEmail,
-          contactName,
-          schoolSize
-        }
-      }
-    });
-
-    return res.json({
-      ok: true,
-      url: session.url
-    });
-  } catch (error) {
-    console.error('School checkout create failed:', error);
-    return res.status(500).json({ error: 'Impossibile creare il checkout Stripe.' });
-  }
-});
-
 app.post('/api/partner-leads', async (req, res) => {
   const db = readDb();
 
   const nameValue = text(req.body.name, 60);
   const emailValue = email(req.body.email);
   const organization = text(req.body.organization, 80);
-  const tier = ['school_starter', 'school_pro', 'custom'].includes(req.body.tier)
-    ? req.body.tier
-    : 'school_starter';
-  const tierLabel =
-    tier === 'school_pro'
-      ? 'School Pro'
-      : tier === 'custom'
-        ? 'Custom'
-        : 'School Starter';
+  const tierInput = text(req.body.tier, 40).toLowerCase();
+  const tier = ['starter', 'pro', 'campus', 'custom'].includes(tierInput) ? tierInput : 'custom';
   const goal = text(req.body.goal, 60);
   const message = text(req.body.message, 400);
 
@@ -1265,14 +1200,12 @@ app.post('/api/partner-leads', async (req, res) => {
     return res.status(400).json({ error: 'Completa nome, email e organizzazione.' });
   }
 
-  db.partnerLeads = db.partnerLeads || [];
   db.partnerLeads.unshift({
     id: makeId('p'),
     name: nameValue,
     email: emailValue,
     organization,
     tier,
-    tierLabel,
     goal,
     message,
     createdAt: new Date().toISOString()
@@ -1286,24 +1219,23 @@ app.post('/api/partner-leads', async (req, res) => {
       subject: `[Inclusio] Nuovo lead partner — ${organization} (${tier})`,
       html: `
         <h2>Nuovo lead partner</h2>
-        <p><strong>Nome:</strong> ${nameValue}</p>
-        <p><strong>Email:</strong> ${emailValue}</p>
-        <p><strong>Organizzazione:</strong> ${organization}</p>
-        <p><strong>Pacchetto:</strong> ${tierLabel}</p>
-        <p><strong>Goal:</strong> ${goal}</p>
-        <p><strong>Messaggio:</strong><br>${message || 'Nessun messaggio'}</p>
+        <p><strong>Nome:</strong> ${esc(nameValue)}</p>
+        <p><strong>Email:</strong> ${esc(emailValue)}</p>
+        <p><strong>Organizzazione:</strong> ${esc(organization)}</p>
+        <p><strong>Pacchetto:</strong> ${esc(tier)}</p>
+        <p><strong>Goal:</strong> ${esc(goal)}</p>
+        <p><strong>Messaggio:</strong><br>${esc(message || 'Nessun messaggio')}</p>
       `
     }),
     safeSendEmail({
       to: emailValue,
-      subject: 'Inclusio — richiesta demo ricevuta',
+      subject: 'Inclusio — richiesta proposta ricevuta',
       html: `
-        <h2>Richiesta demo ricevuta</h2>
-        <p>Ciao ${nameValue},</p>
-        <p>abbiamo ricevuto la tua richiesta per <strong>${organization}</strong>.</p>
-        <p><strong>Pacchetto richiesto:</strong> ${tierLabel}</p>
+        <h2>Richiesta proposta ricevuta</h2>
+        <p>Ciao ${esc(nameValue)},</p>
+        <p>abbiamo ricevuto la tua richiesta per ${esc(organization)}.</p>
         <p>Ti ricontatteremo presto.</p>
-        <p><a href="${APP_BASE_URL}">Vai al sito</a></p>
+        <p><a href="${APP_BASE_URL || '#'}">Vai al sito</a></p>
       `
     })
   ]);
@@ -1311,107 +1243,20 @@ app.post('/api/partner-leads', async (req, res) => {
   return res.status(201).json({
     ok: true,
     message:
-      tier === 'custom'
-        ? 'Richiesta personalizzata ricevuta. Ti contatteremo per proposta e setup.'
-        : tier === 'school_pro'
-          ? 'Richiesta School Pro ricevuta. Ti contatteremo per demo e setup avanzato.'
-          : 'Richiesta School Starter ricevuta. Ti contatteremo per demo e setup iniziale.'
-  });
-
-});
-
-app.get('/api/subscriptions/lookup', (req, res) => {
-  const db = readDb();
-  const emailValue = email(req.query.email);
-
-  if (!isValidEmail(emailValue)) {
-    return res.status(400).json({ error: 'Inserisci una email valida.' });
-  }
-
-  const planCode = getPlanCodeForEmail(db, emailValue);
-  const subscription = getActiveSubscriptionByEmail(db, emailValue);
-
-  return res.json({
-    ok: true,
-    email: emailValue,
-    planCode,
-    planLabel: getPlanLabel(planCode),
-    entitlements: getPlanEntitlements(planCode),
-    subscription
-  });
-});
-
-app.post('/api/subscriptions/activate', async (req, res) => {
-  const adminToken = String(req.headers['x-billing-token'] || req.body.adminToken || '').trim();
-
-  if (!BILLING_ADMIN_TOKEN || adminToken !== BILLING_ADMIN_TOKEN) {
-    return res.status(403).json({ error: 'Operazione non autorizzata.' });
-  }
-
-  const db = readDb();
-  const emailValue = email(req.body.email);
-  const planCode = normalizePlanCode(req.body.planCode);
-  const source = text(req.body.source, 30) || 'manual';
-
-  if (!isValidEmail(emailValue)) {
-    return res.status(400).json({ error: 'Inserisci una email valida.' });
-  }
-
-  if (planCode === 'solo') {
-    return res.status(400).json({ error: 'Attiva un piano Plus valido.' });
-  }
-
-  const now = new Date().toISOString();
-
-  db.subscriptions = (db.subscriptions || []).map((subscription) =>
-    email(subscription.email) === emailValue && String(subscription.status || '').toLowerCase() === 'active'
-      ? { ...subscription, status: 'replaced', replacedAt: now }
-      : subscription
-  );
-
-  const subscription = {
-    id: makeId('sub'),
-    email: emailValue,
-    planCode,
-    status: 'active',
-    source,
-    createdAt: now,
-    activatedAt: now
-  };
-
-  db.subscriptions.unshift(subscription);
-
-  const existingUser = db.users.find((item) => item.email === emailValue);
-  if (existingUser) {
-    existingUser.planCode = planCode;
-  }
-
-  writeDb(db);
-
-  await safeSendEmail({
-    to: emailValue,
-    subject: `Inclusio — ${getPlanLabel(planCode)} attivato`,
-    html: `
-      <h2>Piano attivato</h2>
-      <p>Il tuo piano <strong>${getPlanLabel(planCode)}</strong> è ora attivo.</p>
-      <p>Da questo momento hai accesso ai servizi extra previsti dal piano.</p>
-      <p><a href="${APP_BASE_URL}">Vai al sito</a></p>
-    `
-  });
-
-  return res.status(201).json({
-    ok: true,
-    email: emailValue,
-    planCode,
-    planLabel: getPlanLabel(planCode),
-    entitlements: getPlanEntitlements(planCode),
-    subscription
+      tier === 'pro'
+        ? 'Richiesta Pro ricevuta. Ti contatteremo per demo e setup avanzato.'
+        : tier === 'starter'
+        ? 'Richiesta Starter ricevuta. Ti contatteremo per demo e setup iniziale.'
+        : 'Richiesta Enterprise ricevuta. Ti contatteremo per proposta personalizzata.'
   });
 });
 
 app.post('/api/reset', (req, res) => {
   fs.copyFileSync(SEED_PATH, DB_PATH);
-  res.json({ ok: true, message: 'Ambiente demo ripristinato.' });
+  res.json({
+    ok: true,
+    message: 'Ambiente demo ripristinato.'
+  });
 });
 
 app.get('/favicon.ico', (req, res) => {
@@ -1420,9 +1265,14 @@ app.get('/favicon.ico', (req, res) => {
 
 app.listen(PORT, HOST, () => {
   console.log(`Inclusio API in ascolto su http://${HOST}:${PORT}`);
+
   if (!nodemailer) {
     console.log('Nodemailer non installato: email Gmail disabilitate finché non esegui npm install nodemailer');
   } else if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
     console.log('Credenziali Gmail mancanti: email disabilitate finché non imposti GMAIL_USER e GMAIL_APP_PASSWORD');
+  }
+
+  if (!stripe) {
+    console.log('Stripe non configurato: checkout scuola disabilitato finché non imposti STRIPE_SECRET_KEY');
   }
 });
