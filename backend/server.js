@@ -3,12 +3,6 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 
-try {
-  nodemailer = require('nodemailer');
-} catch (error) {
-  nodemailer = null;
-}
-
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const HOST = '0.0.0.0';
