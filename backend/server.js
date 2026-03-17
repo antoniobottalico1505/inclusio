@@ -18,34 +18,6 @@ const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
 const SMTP_PORT = Number(process.env.SMTP_PORT || 465);
 const SMTP_SECURE = String(process.env.SMTP_SECURE || 'true') === 'true';
 
-const mailTransport =
-  GMAIL_USER && GMAIL_APP_PASSWORD
-    ? nodemailer.createTransport({
-        host: SMTP_HOST,
-        port: SMTP_PORT,
-        secure: SMTP_SECURE,
-        auth: {
-          user: GMAIL_USER,
-          pass: GMAIL_APP_PASSWORD
-        }
-      })
-    : null;
-
-async function safeSendEmail({ to, subject, html }) {
-  if (!mailTransport || !to) return;
-
-  try {
-    await mailTransport.sendMail({
-      from: `"Inclusio" <${GMAIL_USER}>`,
-      to,
-      subject,
-      html
-    });
-  } catch (error) {
-    console.error('Email send failed:', error.message);
-  }
-}
-
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 
