@@ -22,53 +22,101 @@
       "id": "u-alice",
       "name": "Alice",
       "city": "Milano",
-      "interests": ["Design", "Arte", "Fotografia", "Libri"],
-      "goals": ["fare_amicizia", "trovare_gruppo"],
+      "interests": [
+        "Design",
+        "Arte",
+        "Fotografia",
+        "Libri"
+      ],
+      "goals": [
+        "fare_amicizia",
+        "trovare_gruppo"
+      ],
       "comfort": 2,
       "energy": 3,
       "accessibility": "Preferisce gruppi piccoli, conversazioni tranquille e attività con facilitatore.",
-      "joinedGroupIds": ["g-creative-circle"],
+      "joinedGroupIds": [
+        "g-creative-circle"
+      ],
       "buddyEligible": true,
-      "mentor": true
+      "mentor": true,
+      "email": "alice@example.com",
+      "planCode": "solo"
     },
     {
       "id": "u-marco",
       "name": "Marco",
       "city": "Milano",
-      "interests": ["Coding", "Gaming", "Startup", "Tecnologia"],
-      "goals": ["costruire_team", "fare_amicizia"],
+      "interests": [
+        "Coding",
+        "Gaming",
+        "Startup",
+        "Tecnologia"
+      ],
+      "goals": [
+        "costruire_team",
+        "fare_amicizia"
+      ],
       "comfort": 3,
       "energy": 4,
       "accessibility": "Apprezza attività strutturate e pairing chiari.",
-      "joinedGroupIds": ["g-build-club"],
+      "joinedGroupIds": [
+        "g-build-club"
+      ],
       "buddyEligible": true,
-      "mentor": true
+      "mentor": true,
+      "email": "marco@example.com",
+      "planCode": "plus_monthly"
     },
     {
       "id": "u-sara",
       "name": "Sara",
       "city": "Milano",
-      "interests": ["Musica", "Lingue", "Viaggi", "Cinema"],
-      "goals": ["uscire_di_piu", "fare_amicizia"],
+      "interests": [
+        "Musica",
+        "Lingue",
+        "Viaggi",
+        "Cinema"
+      ],
+      "goals": [
+        "uscire_di_piu",
+        "fare_amicizia"
+      ],
       "comfort": 4,
       "energy": 4,
       "accessibility": "Si trova bene in attività miste online/offline e gruppi molto chiari nelle regole.",
-      "joinedGroupIds": ["g-slow-social"],
+      "joinedGroupIds": [
+        "g-slow-social"
+      ],
       "buddyEligible": true,
-      "mentor": false
+      "mentor": false,
+      "email": "sara@example.com",
+      "planCode": "plus_annual"
     },
     {
       "id": "u-luca",
       "name": "Luca",
       "city": "Bologna",
-      "interests": ["Libri", "Podcast", "Viaggi", "Natura"],
-      "goals": ["trovare_gruppo", "uscire_di_piu"],
+      "interests": [
+        "Libri",
+        "Podcast",
+        "Viaggi",
+        "Natura"
+      ],
+      "goals": [
+        "trovare_gruppo",
+        "uscire_di_piu"
+      ],
       "comfort": 2,
       "energy": 2,
       "accessibility": "Preferisce tempi lenti, incontri brevi e introduzioni uno-a-uno.",
-      "joinedGroupIds": ["g-new-city-club"],
+      "joinedGroupIds": [
+        "g-new-city-club"
+      ],
       "buddyEligible": true,
-      "mentor": false
+      "mentor": false,
+      "email": "luca@example.com",
+      "planCode": "solo"
     }
   ],
   "groups": [
@@ -80,8 +128,14 @@
       "sizeLimit": 8,
       "targetComfort": 2,
       "energy": 2,
-      "tags": ["Arte", "Fotografia", "Design"],
-      "members": ["u-alice"],
+      "tags": [
+        "Arte",
+        "Fotografia",
+        "Design"
+      ],
+      "members": [
+        "u-alice"
+      ],
       "activities": [
         {
           "id": "a-photo-walk",
@@ -97,7 +151,8 @@
           "when": "Martedì 19:00",
           "mode": "online",
           "description": "Attività breve con immagini e storie personali leggere.",
-          "rsvps": []
+          "rsvps": [],
+          "premiumOnly": true
         }
       ]
     },
@@ -109,8 +164,15 @@
       "sizeLimit": 10,
       "targetComfort": 3,
       "energy": 4,
-      "tags": ["Coding", "Startup", "Tecnologia", "Design"],
-      "members": ["u-marco"],
+      "tags": [
+        "Coding",
+        "Startup",
+        "Tecnologia",
+        "Design"
+      ],
+      "members": [
+        "u-marco"
+      ],
       "activities": [
         {
           "id": "a-ship-night",
@@ -118,9 +180,11 @@
           "when": "Giovedì 20:00",
           "mode": "online",
           "description": "Sprint collaborativo di 60 minuti con buddy pairing automatico.",
-          "rsvps": []
+          "rsvps": [],
+          "premiumOnly": true
         }
-      ]
+      ],
+      "premiumOnly": true
     },
     {
       "id": "g-slow-social",
@@ -130,8 +194,15 @@
       "sizeLimit": 6,
       "targetComfort": 1,
       "energy": 2,
-      "tags": ["Libri", "Cinema", "Musica", "Lingue"],
-      "members": ["u-sara"],
+      "tags": [
+        "Libri",
+        "Cinema",
+        "Musica",
+        "Lingue"
+      ],
+      "members": [
+        "u-sara"
+      ],
       "activities": [
         {
           "id": "a-cinema-cafe",
@@ -151,7 +222,11 @@
       "sizeLimit": 12,
       "targetComfort": 2,
       "energy": 3,
-      "tags": ["Natura", "Sport", "Volontariato"],
+      "tags": [
+        "Natura",
+        "Sport",
+        "Volontariato"
+      ],
       "members": [],
       "activities": [
         {
@@ -172,8 +247,15 @@
       "sizeLimit": 8,
       "targetComfort": 2,
       "energy": 2,
-      "tags": ["Viaggi", "Podcast", "Libri", "Natura"],
-      "members": ["u-luca"],
+      "tags": [
+        "Viaggi",
+        "Podcast",
+        "Libri",
+        "Natura"
+      ],
+      "members": [
+        "u-luca"
+      ],
       "activities": [
         {
           "id": "a-city-intro",
@@ -261,18 +343,23 @@
       "organization": "Campus Milano Nord",
       "goal": "student-life",
       "message": "Vogliamo migliorare l'integrazione dei nuovi iscritti.",
-      "createdAt": "2026-03-14T10:45:00.000Z"
+      "createdAt": "2026-03-14T10:45:00.000Z",
+      "tier": "school_starter",
+      "tierLabel": "School Starter"
     }
   ],
   "marketing": {
     "plans": [
       {
+        "code": "solo",
         "audience": "Per iniziare",
         "name": "Solo",
-        "description": "Per chi vuole provare Inclusio e trovare un primo gruppo senza impegno.",
+        "description": "Per chi vuole provare Inclusio e capire se il formato è adatto, senza pagamento.",
         "price": "€0",
         "period": "/mese",
         "highlight": false,
+        "ctaType": "free",
+        "ctaLabel": "Inizia gratis",
         "features": [
           "accesso base ai gruppi aperti",
           "1 buddy match suggerito",
@@ -281,12 +368,15 @@
         ]
       },
       {
+        "code": "plus_monthly",
         "audience": "Per uso personale",
         "name": "Plus Mensile",
-        "description": "Per chi vuole continuità, introduzioni curate e percorsi sociali più guidati.",
+        "description": "Per chi vuole continuità, introduzioni curate e maggiore priorità nei percorsi.",
         "price": "€12,90",
         "period": "/mese",
         "highlight": true,
+        "ctaType": "stripe_monthly",
+        "ctaLabel": "Attiva Plus mensile",
         "features": [
           "cerchi premium tematici",
           "priorità negli ingressi",
@@ -295,12 +385,15 @@
         ]
       },
       {
+        "code": "plus_annual",
         "audience": "Per uso personale",
         "name": "Plus Annuale",
-        "description": "Versione annuale scontata per utenti che vogliono usare il prodotto con continuità.",
+        "description": "Versione annuale scontata per utenti che vogliono usare Inclusio con continuità.",
         "price": "€119",
         "period": "/anno",
         "highlight": false,
+        "ctaType": "stripe_annual",
+        "ctaLabel": "Attiva Plus annuale",
         "features": [
           "tutto del Plus",
           "prezzo ridotto rispetto al mensile",
@@ -309,12 +402,15 @@
         ]
       },
       {
+        "code": "school_starter",
         "audience": "Per scuole e università",
         "name": "School Starter",
         "description": "Per istituti che vogliono migliorare integrazione, appartenenza e onboarding sociale.",
         "price": "da €1.990",
         "period": "/anno",
         "highlight": false,
+        "ctaType": "b2b",
+        "ctaLabel": "Richiedi demo Starter",
         "features": [
           "dashboard istituto",
           "onboarding nuovi ingressi",
@@ -323,12 +419,15 @@
         ]
       },
       {
+        "code": "school_pro",
         "audience": "Per strutture più grandi",
         "name": "School Pro",
         "description": "Per campus, reti scolastiche e organizzazioni che vogliono strumenti più completi.",
         "price": "da €3.990",
         "period": "/anno",
         "highlight": false,
+        "ctaType": "b2b",
+        "ctaLabel": "Richiedi demo Pro",
         "features": [
           "tutto dello Starter",
           "più sedi o più segmenti",
@@ -353,7 +452,31 @@
       {
         "q": "È pensato solo per persone fragili?",
         "a": "No. È pensato per chi vuole entrare meglio nei gruppi, sentirsi più incluso e costruire comunità più aperte."
+      },
+      {
+        "q": "Che cosa cambia davvero tra Solo e Plus?",
+        "a": "Solo consente un uso base con un solo gruppo attivo e un solo buddy suggerito. Plus sblocca gruppi premium, fino a tre gruppi attivi, fino a tre buddy match e insight avanzati."
       }
     ]
-  }
+  },
+  "subscriptions": [
+    {
+      "id": "sub-demo-1",
+      "email": "marco@example.com",
+      "planCode": "plus_monthly",
+      "status": "active",
+      "source": "seed",
+      "createdAt": "2026-03-14T09:30:00.000Z",
+      "activatedAt": "2026-03-14T09:30:00.000Z"
+    },
+    {
+      "id": "sub-demo-2",
+      "email": "sara@example.com",
+      "planCode": "plus_annual",
+      "status": "active",
+      "source": "seed",
+      "createdAt": "2026-03-14T09:45:00.000Z",
+      "activatedAt": "2026-03-14T09:45:00.000Z"
+    }
+  ]
 }

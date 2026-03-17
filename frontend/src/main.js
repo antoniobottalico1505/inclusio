@@ -1,27 +1,31 @@
 import './styles.css';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
-const STRIPE_PLUS_MONTHLY = import.meta.env.VITE_STRIPE_LINK_PLUS_MONTHLY || '';
-const STRIPE_PLUS_ANNUAL = import.meta.env.VITE_STRIPE_LINK_PLUS_ANNUAL || '';
+const STRIPE_LINKS = {
+  plus_monthly: import.meta.env.VITE_STRIPE_LINK_PLUS_MONTHLY || '',
+  plus_annual: import.meta.env.VITE_STRIPE_LINK_PLUS_ANNUAL || ''
+};
 
 function getPlanCta(plan) {
-  if (plan.ctaType === 'stripe_monthly') {
+  const code = String(plan?.code || '').trim();
+
+  if (code === 'plus_monthly') {
     return {
-      href: STRIPE_PLUS_MONTHLY || '#waitlist',
+      href: STRIPE_LINKS.plus_monthly || '#waitlist',
       label: plan.ctaLabel || 'Attiva Plus mensile',
-      external: Boolean(STRIPE_PLUS_MONTHLY)
+      external: Boolean(STRIPE_LINKS.plus_monthly)
     };
   }
 
-  if (plan.ctaType === 'stripe_annual') {
+  if (code === 'plus_annual') {
     return {
-      href: STRIPE_PLUS_ANNUAL || '#waitlist',
+      href: STRIPE_LINKS.plus_annual || '#waitlist',
       label: plan.ctaLabel || 'Attiva Plus annuale',
-      external: Boolean(STRIPE_PLUS_ANNUAL)
+      external: Boolean(STRIPE_LINKS.plus_annual)
     };
   }
 
-  if (plan.ctaType === 'b2b') {
+  if (code === 'school_starter' || code === 'school_pro' || code === 'custom' || plan.ctaType === 'b2b') {
     return {
       href: '#partner',
       label: plan.ctaLabel || 'Richiedi demo',
@@ -34,6 +38,17 @@ function getPlanCta(plan) {
     label: plan.ctaLabel || 'Inizia gratis',
     external: false
   };
+}
+
+function hydratePlanPrefillFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const tier = String(params.get('tier') || params.get('plan') || '').trim();
+  const partnerForm = $('#partner-form');
+
+  if (partnerForm && partnerForm.elements?.tier && ['school_starter', 'school_pro', 'custom'].includes(tier)) {
+    partnerForm.elements.tier.value = tier;
+    window.location.hash = 'partner';
+  }
 }
 
 const $ = (selector) => document.querySelector(selector);
@@ -93,3 +108,6 @@ function wireForm(selector, path, successSelector) {
 
 wireForm('#waitlist-form', '/api/waitlist', '#waitlist-result');
 wireForm('#partner-form', '/api/partner-leads', '#partner-result');
+
+
+hydratePlanPrefillFromUrl();

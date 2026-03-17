@@ -17,6 +17,7 @@ const APP_BASE_URL = process.env.APP_BASE_URL || '';
 const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
 const SMTP_PORT = Number(process.env.SMTP_PORT || 465);
 const SMTP_SECURE = String(process.env.SMTP_SECURE || 'true') === 'true';
+const BILLING_ADMIN_TOKEN = process.env.BILLING_ADMIN_TOKEN || '';
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
@@ -62,6 +63,7 @@ function baseDbShape() {
     reports: [],
     waitlist: [],
     partnerLeads: [],
+    subscriptions: [],
     marketing: {
       plans: [],
       faqs: []
@@ -87,16 +89,19 @@ function normalizeDb(raw) {
   db.reports = Array.isArray(db.reports) ? db.reports : [];
   db.waitlist = Array.isArray(db.waitlist) ? db.waitlist : [];
   db.partnerLeads = Array.isArray(db.partnerLeads) ? db.partnerLeads : [];
+  db.subscriptions = Array.isArray(db.subscriptions) ? db.subscriptions : [];
   db.marketing.plans = Array.isArray(db.marketing.plans) ? db.marketing.plans : [];
   db.marketing.faqs = Array.isArray(db.marketing.faqs) ? db.marketing.faqs : [];
 
   db.groups = db.groups.map((group) => ({
     ...group,
+    premiumOnly: Boolean(group.premiumOnly),
     tags: Array.isArray(group.tags) ? group.tags : [],
     members: Array.isArray(group.members) ? group.members : [],
     activities: Array.isArray(group.activities)
       ? group.activities.map((activity) => ({
           ...activity,
+          premiumOnly: Boolean(activity.premiumOnly),
           rsvps: Array.isArray(activity.rsvps) ? activity.rsvps : []
         }))
       : []
@@ -104,9 +109,19 @@ function normalizeDb(raw) {
 
   db.users = db.users.map((user) => ({
     ...user,
+    email: email(user.email),
+    planCode: normalizePlanCode(user.planCode || user.plan),
     interests: Array.isArray(user.interests) ? user.interests : [],
     goals: Array.isArray(user.goals) ? user.goals : [],
     joinedGroupIds: Array.isArray(user.joinedGroupIds) ? user.joinedGroupIds : []
+  }));
+
+  db.subscriptions = db.subscriptions.map((subscription) => ({
+    ...subscription,
+    email: email(subscription.email),
+    planCode: normalizePlanCode(subscription.planCode || subscription.plan),
+    status: text(subscription.status || 'active', 20) || 'active',
+    source: text(subscription.source || 'manual', 30) || 'manual'
   }));
 
   return db;
@@ -169,6 +184,76 @@ function esc(value) {
     .replace(/'/g, '&#039;');
 }
 
+
+function normalizePlanCode(value) {
+  const code = String(value || '').trim().toLowerCase();
+
+  if (['plus', 'plus_monthly', 'monthly', 'mensile'].includes(code)) return 'plus_monthly';
+  if (['plus_annual', 'annual', 'annuale'].includes(code)) return 'plus_annual';
+
+  return 'solo';
+}
+
+function getPlanLabel(planCode = 'solo') {
+  const normalized = normalizePlanCode(planCode);
+
+  if (normalized === 'plus_annual') return 'Plus Annuale';
+  if (normalized === 'plus_monthly') return 'Plus Mensile';
+
+  return 'Solo';
+}
+
+function getPlanEntitlements(planCode = 'solo') {
+  const normalized = normalizePlanCode(planCode);
+  const isPaid = normalized === 'plus_monthly' || normalized === 'plus_annual';
+
+  return {
+    planCode: normalized,
+    planLabel: getPlanLabel(normalized),
+    isPaid,
+    maxGroups: isPaid ? 3 : 1,
+    buddyMatches: isPaid ? 3 : 1,
+    premiumGroups: isPaid,
+    premiumActivities: isPaid,
+    advancedInsights: isPaid,
+    priorityIntroductions: isPaid,
+    supportLevel: isPaid ? 'priority' : 'base'
+  };
+}
+
+function getActiveSubscriptionByEmail(db, emailValue) {
+  const normalizedEmail = email(emailValue);
+  if (!normalizedEmail || !Array.isArray(db.subscriptions)) return null;
+
+  return (
+    db.subscriptions.find((subscription) => {
+      if (email(subscription.email) !== normalizedEmail) return false;
+      if (String(subscription.status || '').toLowerCase() !== 'active') return false;
+      return normalizePlanCode(subscription.planCode || subscription.plan) !== 'solo';
+    }) || null
+  );
+}
+
+function getPlanCodeForEmail(db, emailValue) {
+  const activeSubscription = getActiveSubscriptionByEmail(db, emailValue);
+  return activeSubscription ? normalizePlanCode(activeSubscription.planCode || activeSubscription.plan) : 'solo';
+}
+
+function getUserPlanCode(db, user) {
+  if (!user) return 'solo';
+
+  if (user.email) {
+    const subscriptionPlan = getPlanCodeForEmail(db, user.email);
+    if (subscriptionPlan !== 'solo') return subscriptionPlan;
+  }
+
+  return normalizePlanCode(user.planCode || user.plan);
+}
+
+function getUserEntitlements(db, user) {
+  return getPlanEntitlements(getUserPlanCode(db, user));
+}
+
 function getUserById(db, userId) {
   return db.users.find((user) => user.id === userId) || null;
 }
@@ -199,12 +284,25 @@ function getGroupMemberProfiles(db, group) {
 }
 
 function serializeGroup(db, group, currentUserId = null) {
+  const currentUser = currentUserId ? getUserById(db, currentUserId) : null;
+  const entitlements = currentUser ? getUserEntitlements(db, currentUser) : getPlanEntitlements('solo');
+
   return {
     ...group,
+    premiumOnly: Boolean(group.premiumOnly),
+    lockedByPlan: Boolean(group.premiumOnly) && !entitlements.premiumGroups,
+    lockedReason: Boolean(group.premiumOnly) && !entitlements.premiumGroups ? 'Disponibile con Plus.' : null,
     memberCount: (group.members || []).length,
     spotsLeft: Math.max(Number(group.sizeLimit || 0) - (group.members || []).length, 0),
     isJoined: currentUserId ? (group.members || []).includes(currentUserId) : false,
-    membersPreview: getGroupMemberProfiles(db, group)
+    membersPreview: getGroupMemberProfiles(db, group),
+    activities: (group.activities || []).map((activity) => ({
+      ...activity,
+      premiumOnly: Boolean(activity.premiumOnly),
+      lockedByPlan: Boolean(activity.premiumOnly) && !entitlements.premiumActivities,
+      lockedReason: Boolean(activity.premiumOnly) && !entitlements.premiumActivities ? 'Disponibile con Plus.' : null,
+      isRsvped: currentUserId ? (activity.rsvps || []).includes(currentUserId) : false
+    }))
   };
 }
 
@@ -224,8 +322,15 @@ function recommendGroups(db, userId) {
   const user = getUserById(db, userId);
   if (!user) return [];
 
+  const entitlements = getUserEntitlements(db, user);
+
   return db.groups
-    .filter((group) => !(group.members || []).includes(userId) && (group.members || []).length < Number(group.sizeLimit || 0))
+    .filter((group) => {
+      if ((group.members || []).includes(userId)) return false;
+      if ((group.members || []).length >= Number(group.sizeLimit || 0)) return false;
+      if (group.premiumOnly && !entitlements.premiumGroups) return false;
+      return true;
+    })
     .map((group) => ({
       ...serializeGroup(db, group, userId),
       matchScore: scoreGroupForUser(group, user),
@@ -237,14 +342,14 @@ function recommendGroups(db, userId) {
       ])
     }))
     .sort((a, b) => b.matchScore - a.matchScore)
-    .slice(0, 6);
+    .slice(0, entitlements.isPaid ? 6 : 4);
 }
 
-function recommendBuddy(db, userId) {
+function recommendBuddies(db, userId, limit = 1) {
   const user = getUserById(db, userId);
-  if (!user) return null;
+  if (!user) return [];
 
-  const candidates = db.users
+  return db.users
     .filter((candidate) => candidate.id !== userId && candidate.buddyEligible)
     .map((candidate) => {
       const candidateInterests = Array.isArray(candidate.interests) ? candidate.interests : [];
@@ -263,9 +368,12 @@ function recommendBuddy(db, userId) {
         score
       };
     })
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
+}
 
-  return candidates[0] || null;
+function recommendBuddy(db, userId) {
+  return recommendBuddies(db, userId, 1)[0] || null;
 }
 
 function computeActionPlan(summary) {
@@ -282,10 +390,26 @@ function computeActionPlan(summary) {
   return unique(actions).slice(0, 4);
 }
 
+
+function computeAdvancedInsights(summary) {
+  if (!summary) return null;
+
+  const stabilityBase = 100 - summary.stats.recentAnxietyAverage * 12 + summary.stats.recentInclusionAverage * 7;
+  const momentumBase = summary.stats.belongingScore + summary.stats.plannedActivities * 4 + summary.stats.joinedGroups * 3;
+
+  return {
+    momentumScore: clamp(Math.round(momentumBase), 0, 100),
+    socialStabilityScore: clamp(Math.round(stabilityBase), 0, 100),
+    nextBestAction: summary.actionPlan[0] || 'Continua con un gruppo coerente con il tuo ritmo.',
+    unlockHint: summary.account?.isPaid ? null : 'Con Plus sblocchi gruppi premium, più buddy match e insight avanzati.'
+  };
+}
+
 function computeUserSummary(db, userId) {
   const user = getUserById(db, userId);
   if (!user) return null;
 
+  const entitlements = getUserEntitlements(db, user);
   const myGroups = db.groups.filter((group) => (group.members || []).includes(userId));
   const checkins = getUserCheckins(db, userId);
   const recentCheckins = checkins.slice(0, 5);
@@ -320,19 +444,40 @@ function computeUserSummary(db, userId) {
     reportsOpen: reports.filter((report) => report.status !== 'resolved').length
   };
 
+  const buddyMatches = recommendBuddies(db, userId, entitlements.buddyMatches);
+
   const summary = {
     user,
+    account: {
+      email: user.email || '',
+      planCode: entitlements.planCode,
+      planLabel: entitlements.planLabel,
+      isPaid: entitlements.isPaid,
+      entitlements
+    },
     stats,
     myGroups: myGroups.map((group) => serializeGroup(db, group, userId)),
     recommendations: recommendGroups(db, userId),
-    buddy: recommendBuddy(db, userId),
+    buddy: buddyMatches[0] || null,
+    buddyMatches,
     checkins,
     reports
   };
 
+  const actionPlan = computeActionPlan(summary);
+
   return {
     ...summary,
-    actionPlan: computeActionPlan(summary)
+    actionPlan: entitlements.advancedInsights ? actionPlan : actionPlan.slice(0, 2),
+    advancedInsights: entitlements.advancedInsights ? computeAdvancedInsights({ ...summary, actionPlan }) : null,
+    lockedFeatures: entitlements.isPaid
+      ? []
+      : [
+          'Fino a 3 gruppi attivi',
+          'Fino a 3 buddy match',
+          'Gruppi e attività premium',
+          'Insight personali avanzati'
+        ]
   };
 }
 
@@ -364,6 +509,7 @@ function computeInsights(db) {
     openReports: db.reports.filter((report) => report.status !== 'resolved').length,
     waitlistCount: (db.waitlist || []).length,
     partnerLeadsCount: (db.partnerLeads || []).length,
+    activeSubscriptions: (db.subscriptions || []).filter((item) => String(item.status || '').toLowerCase() === 'active').length,
     lonelyUsers: lonelyUsers.map((user) => ({ id: user.id, name: user.name, city: user.city })),
     closedGroups,
     reportsByCategory: db.reports.reduce((acc, report) => {
@@ -378,6 +524,10 @@ function getMarketing(db) {
   return {
     plans: db.marketing?.plans || [],
     faqs: db.marketing?.faqs || [],
+    serviceMatrix: {
+      solo: getPlanEntitlements('solo'),
+      plus: getPlanEntitlements('plus_monthly')
+    },
     demoUsers: db.users.slice(0, 4).map((user) => ({
       id: user.id,
       name: user.name,
@@ -421,7 +571,7 @@ app.get('/', (req, res) => {
     ok: true,
     service: 'inclusio-api',
     message: 'Backend attivo. Il frontend pubblico è pensato per Vercel.',
-    endpoints: ['/api/health', '/api/bootstrap', '/api/users/onboard', '/api/waitlist', '/api/partner-leads']
+    endpoints: ['/api/health', '/api/bootstrap', '/api/users/onboard', '/api/waitlist', '/api/partner-leads', '/api/subscriptions/lookup', '/api/subscriptions/activate']
   });
 });
 
@@ -432,13 +582,23 @@ app.get('/api/health', (req, res) => {
 app.get('/api/bootstrap', (req, res) => {
   const db = readDb();
   const userId = req.query.userId ? String(req.query.userId) : null;
+  const emailValue = req.query.email ? email(req.query.email) : '';
+  const previewPlanCode = emailValue ? getPlanCodeForEmail(db, emailValue) : 'solo';
 
   res.json({
     appName: 'Inclusio',
     interests: db.interests,
     summary: userId ? computeUserSummary(db, userId) : null,
     insights: computeInsights(db),
-    marketing: getMarketing(db)
+    marketing: getMarketing(db),
+    billingPreview: emailValue
+      ? {
+          email: emailValue,
+          planCode: previewPlanCode,
+          planLabel: getPlanLabel(previewPlanCode),
+          entitlements: getPlanEntitlements(previewPlanCode)
+        }
+      : null
   });
 });
 
@@ -446,6 +606,7 @@ app.post('/api/users/onboard', (req, res) => {
   const db = readDb();
 
   const name = text(req.body.name, 40);
+  const emailValue = email(req.body.email);
   const city = text(req.body.city, 40) || 'Online';
   const comfort = clamp(Number(req.body.comfort || 3), 1, 5);
   const energy = clamp(Number(req.body.energy || 3), 1, 5);
@@ -461,9 +622,19 @@ app.post('/api/users/onboard', (req, res) => {
     return res.status(400).json({ error: 'Il nome è obbligatorio.' });
   }
 
+  if (req.body.email && !isValidEmail(emailValue)) {
+    return res.status(400).json({ error: 'Inserisci un indirizzo email valido.' });
+  }
+
+  if (emailValue && db.users.find((item) => item.email === emailValue)) {
+    return res.status(409).json({ error: 'Esiste già un profilo associato a questa email.' });
+  }
+
   const user = {
     id: `u-${slugify(name)}-${Math.random().toString(36).slice(2, 6)}`,
     name,
+    email: emailValue,
+    planCode: getPlanCodeForEmail(db, emailValue),
     city,
     interests,
     goals,
@@ -512,8 +683,20 @@ app.post('/api/groups/:groupId/join', (req, res) => {
     return res.status(404).json({ error: 'Gruppo o profilo non trovato.' });
   }
 
+  const entitlements = getUserEntitlements(db, user);
+
   if ((group.members || []).includes(userId)) {
     return res.json({ summary: computeUserSummary(db, userId), message: 'Sei già in questo gruppo.' });
+  }
+
+  if (group.premiumOnly && !entitlements.premiumGroups) {
+    return res.status(403).json({ error: 'Questo gruppo è disponibile con Plus.' });
+  }
+
+  if ((user.joinedGroupIds || []).length >= entitlements.maxGroups) {
+    return res.status(403).json({
+      error: `Il piano ${entitlements.planLabel} consente fino a ${entitlements.maxGroups} gruppi attivi.`
+    });
   }
 
   if ((group.members || []).length >= Number(group.sizeLimit || 0)) {
@@ -566,6 +749,12 @@ app.post('/api/groups/:groupId/activities/:activityId/rsvp', (req, res) => {
 
   if (!activity) {
     return res.status(404).json({ error: 'Attività non trovata.' });
+  }
+
+  const entitlements = getUserEntitlements(db, user);
+
+  if (activity.premiumOnly && !entitlements.premiumActivities) {
+    return res.status(403).json({ error: 'Questa attività è disponibile con Plus.' });
   }
 
   if ((activity.rsvps || []).includes(userId)) {
@@ -702,7 +891,15 @@ app.post('/api/partner-leads', async (req, res) => {
   const nameValue = text(req.body.name, 60);
   const emailValue = email(req.body.email);
   const organization = text(req.body.organization, 80);
-  const tier = ['starter', 'pro', 'campus'].includes(req.body.tier) ? req.body.tier : 'starter';
+  const tier = ['school_starter', 'school_pro', 'custom'].includes(req.body.tier)
+    ? req.body.tier
+    : 'school_starter';
+  const tierLabel =
+    tier === 'school_pro'
+      ? 'School Pro'
+      : tier === 'custom'
+        ? 'Custom'
+        : 'School Starter';
   const goal = text(req.body.goal, 60);
   const message = text(req.body.message, 400);
 
@@ -717,6 +914,7 @@ app.post('/api/partner-leads', async (req, res) => {
     email: emailValue,
     organization,
     tier,
+    tierLabel,
     goal,
     message,
     createdAt: new Date().toISOString()
@@ -733,7 +931,7 @@ app.post('/api/partner-leads', async (req, res) => {
         <p><strong>Nome:</strong> ${nameValue}</p>
         <p><strong>Email:</strong> ${emailValue}</p>
         <p><strong>Organizzazione:</strong> ${organization}</p>
-        <p><strong>Pacchetto:</strong> ${tier}</p>
+        <p><strong>Pacchetto:</strong> ${tierLabel}</p>
         <p><strong>Goal:</strong> ${goal}</p>
         <p><strong>Messaggio:</strong><br>${message || 'Nessun messaggio'}</p>
       `
@@ -745,7 +943,7 @@ app.post('/api/partner-leads', async (req, res) => {
         <h2>Richiesta demo ricevuta</h2>
         <p>Ciao ${nameValue},</p>
         <p>abbiamo ricevuto la tua richiesta per <strong>${organization}</strong>.</p>
-        <p><strong>Pacchetto richiesto:</strong> ${tier}</p>
+        <p><strong>Pacchetto richiesto:</strong> ${tierLabel}</p>
         <p>Ti ricontatteremo presto.</p>
         <p><a href="${APP_BASE_URL}">Vai al sito</a></p>
       `
@@ -755,14 +953,105 @@ app.post('/api/partner-leads', async (req, res) => {
   return res.status(201).json({
     ok: true,
     message:
-      tier === 'campus'
-        ? 'Richiesta Campus ricevuta. Ti contatteremo per proposta personalizzata.'
-        : tier === 'pro'
-        ? 'Richiesta Pro ricevuta. Ti contatteremo per demo e setup avanzato.'
-        : 'Richiesta Starter ricevuta. Ti contatteremo per demo e setup iniziale.'
+      tier === 'custom'
+        ? 'Richiesta personalizzata ricevuta. Ti contatteremo per proposta e setup.'
+        : tier === 'school_pro'
+          ? 'Richiesta School Pro ricevuta. Ti contatteremo per demo e setup avanzato.'
+          : 'Richiesta School Starter ricevuta. Ti contatteremo per demo e setup iniziale.'
   });
 
-});app.post('/api/reset', (req, res) => {
+});
+
+app.get('/api/subscriptions/lookup', (req, res) => {
+  const db = readDb();
+  const emailValue = email(req.query.email);
+
+  if (!isValidEmail(emailValue)) {
+    return res.status(400).json({ error: 'Inserisci una email valida.' });
+  }
+
+  const planCode = getPlanCodeForEmail(db, emailValue);
+  const subscription = getActiveSubscriptionByEmail(db, emailValue);
+
+  return res.json({
+    ok: true,
+    email: emailValue,
+    planCode,
+    planLabel: getPlanLabel(planCode),
+    entitlements: getPlanEntitlements(planCode),
+    subscription
+  });
+});
+
+app.post('/api/subscriptions/activate', async (req, res) => {
+  const adminToken = String(req.headers['x-billing-token'] || req.body.adminToken || '').trim();
+
+  if (!BILLING_ADMIN_TOKEN || adminToken !== BILLING_ADMIN_TOKEN) {
+    return res.status(403).json({ error: 'Operazione non autorizzata.' });
+  }
+
+  const db = readDb();
+  const emailValue = email(req.body.email);
+  const planCode = normalizePlanCode(req.body.planCode);
+  const source = text(req.body.source, 30) || 'manual';
+
+  if (!isValidEmail(emailValue)) {
+    return res.status(400).json({ error: 'Inserisci una email valida.' });
+  }
+
+  if (planCode === 'solo') {
+    return res.status(400).json({ error: 'Attiva un piano Plus valido.' });
+  }
+
+  const now = new Date().toISOString();
+
+  db.subscriptions = (db.subscriptions || []).map((subscription) =>
+    email(subscription.email) === emailValue && String(subscription.status || '').toLowerCase() === 'active'
+      ? { ...subscription, status: 'replaced', replacedAt: now }
+      : subscription
+  );
+
+  const subscription = {
+    id: makeId('sub'),
+    email: emailValue,
+    planCode,
+    status: 'active',
+    source,
+    createdAt: now,
+    activatedAt: now
+  };
+
+  db.subscriptions.unshift(subscription);
+
+  const existingUser = db.users.find((item) => item.email === emailValue);
+  if (existingUser) {
+    existingUser.planCode = planCode;
+  }
+
+  writeDb(db);
+
+  await safeSendEmail({
+    to: emailValue,
+    subject: `Inclusio — ${getPlanLabel(planCode)} attivato`,
+    html: `
+      <h2>Piano attivato</h2>
+      <p>Il tuo piano <strong>${getPlanLabel(planCode)}</strong> è ora attivo.</p>
+      <p>Da questo momento hai accesso ai servizi extra previsti dal piano.</p>
+      <p><a href="${APP_BASE_URL}">Vai al sito</a></p>
+    `
+  });
+
+  return res.status(201).json({
+    ok: true,
+    email: emailValue,
+    planCode,
+    planLabel: getPlanLabel(planCode),
+    entitlements: getPlanEntitlements(planCode),
+    subscription
+  });
+});
+
+app.post('/api/reset', (req, res) => {
   fs.copyFileSync(SEED_PATH, DB_PATH);
   res.json({ ok: true, message: 'Ambiente demo ripristinato.' });
 });
