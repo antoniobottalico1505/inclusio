@@ -702,6 +702,7 @@ app.post('/api/partner-leads', async (req, res) => {
   const nameValue = text(req.body.name, 60);
   const emailValue = email(req.body.email);
   const organization = text(req.body.organization, 80);
+  const tier = ['starter', 'pro', 'campus'].includes(req.body.tier) ? req.body.tier : 'starter';
   const goal = text(req.body.goal, 60);
   const message = text(req.body.message, 400);
 
@@ -715,6 +716,7 @@ app.post('/api/partner-leads', async (req, res) => {
     name: nameValue,
     email: emailValue,
     organization,
+    tier,
     goal,
     message,
     createdAt: new Date().toISOString()
@@ -725,12 +727,13 @@ app.post('/api/partner-leads', async (req, res) => {
   await Promise.all([
     safeSendEmail({
       to: OWNER_EMAIL,
-      subject: `[Inclusio] Nuovo lead partner — ${organization}`,
+      subject: `[Inclusio] Nuovo lead partner — ${organization} (${tier})`,
       html: `
         <h2>Nuovo lead partner</h2>
         <p><strong>Nome:</strong> ${nameValue}</p>
         <p><strong>Email:</strong> ${emailValue}</p>
         <p><strong>Organizzazione:</strong> ${organization}</p>
+        <p><strong>Pacchetto:</strong> ${tier}</p>
         <p><strong>Goal:</strong> ${goal}</p>
         <p><strong>Messaggio:</strong><br>${message || 'Nessun messaggio'}</p>
       `
@@ -742,6 +745,7 @@ app.post('/api/partner-leads', async (req, res) => {
         <h2>Richiesta demo ricevuta</h2>
         <p>Ciao ${nameValue},</p>
         <p>abbiamo ricevuto la tua richiesta per <strong>${organization}</strong>.</p>
+        <p><strong>Pacchetto richiesto:</strong> ${tier}</p>
         <p>Ti ricontatteremo presto.</p>
         <p><a href="${APP_BASE_URL}">Vai al sito</a></p>
       `
@@ -750,10 +754,15 @@ app.post('/api/partner-leads', async (req, res) => {
 
   return res.status(201).json({
     ok: true,
-    message: 'Richiesta demo ricevuta. Ti contatteremo presto.'
+    message:
+      tier === 'campus'
+        ? 'Richiesta Campus ricevuta. Ti contatteremo per proposta personalizzata.'
+        : tier === 'pro'
+        ? 'Richiesta Pro ricevuta. Ti contatteremo per demo e setup avanzato.'
+        : 'Richiesta Starter ricevuta. Ti contatteremo per demo e setup iniziale.'
   });
-});
-app.post('/api/reset', (req, res) => {
+
+});app.post('/api/reset', (req, res) => {
   fs.copyFileSync(SEED_PATH, DB_PATH);
   res.json({ ok: true, message: 'Ambiente demo ripristinato.' });
 });

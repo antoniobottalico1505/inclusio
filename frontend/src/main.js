@@ -1,6 +1,40 @@
 import './styles.css';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+const STRIPE_PLUS_MONTHLY = import.meta.env.VITE_STRIPE_LINK_PLUS_MONTHLY || '';
+const STRIPE_PLUS_ANNUAL = import.meta.env.VITE_STRIPE_LINK_PLUS_ANNUAL || '';
+
+function getPlanCta(plan) {
+  if (plan.ctaType === 'stripe_monthly') {
+    return {
+      href: STRIPE_PLUS_MONTHLY || '#waitlist',
+      label: plan.ctaLabel || 'Attiva Plus mensile',
+      external: Boolean(STRIPE_PLUS_MONTHLY)
+    };
+  }
+
+  if (plan.ctaType === 'stripe_annual') {
+    return {
+      href: STRIPE_PLUS_ANNUAL || '#waitlist',
+      label: plan.ctaLabel || 'Attiva Plus annuale',
+      external: Boolean(STRIPE_PLUS_ANNUAL)
+    };
+  }
+
+  if (plan.ctaType === 'b2b') {
+    return {
+      href: '#partner',
+      label: plan.ctaLabel || 'Richiedi demo',
+      external: false
+    };
+  }
+
+  return {
+    href: '#platform',
+    label: plan.ctaLabel || 'Inizia gratis',
+    external: false
+  };
+}
 
 const $ = (selector) => document.querySelector(selector);
 
