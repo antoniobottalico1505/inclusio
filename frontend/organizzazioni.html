@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Inclusio — scuole e organizzazioni</title>
-  <meta name="description" content="Piani Inclusio per scuole, università e organizzazioni con attivazione online per School Starter e School Pro." />
+  <meta name="description" content="Checkout scuole Inclusio con School Starter, School Pro ed Enterprise." />
   <script type="module" src="/src/main.js"></script>
 </head>
 <body>
@@ -25,8 +25,8 @@
       </nav>
 
       <div class="actions">
-        <a class="btn btn-secondary" href="/lista-attesa">Lista d’attesa</a>
-        <a class="btn btn-primary" href="/prezzi">Inizia</a>
+        <a class="btn btn-secondary" href="/prezzi">Torna ai prezzi</a>
+        <a class="btn btn-primary" href="/app">Apri demo</a>
       </div>
     </div>
   </header>
@@ -36,15 +36,15 @@
       <div class="container" style="display:grid; gap:24px;">
         <div class="hero-copy">
           <div class="kicker">Inclusio for schools</div>
-          <h1>Prezzi scuola basati sulla dimensione dell’istituto, con attivazione online immediata.</h1>
+          <h1>Compila una volta i dati della scuola e poi apri Stripe con un click.</h1>
           <p class="lead">
-            School Starter e School Pro si attivano online via checkout Stripe.
-            Campus / Enterprise resta su proposta dedicata per realtà oltre 1.200 studenti o multisede.
+            School Starter e School Pro usano checkout Stripe diretto.
+            Campus / Enterprise resta su proposta personalizzata.
           </p>
         </div>
 
         <div class="card" style="display:grid; gap:16px;">
-          <h2>Compila una volta sola e poi scegli il piano</h2>
+          <h2>Dati minimi per il checkout scuole</h2>
 
           <form id="school-checkout-form" style="display:grid; gap:12px;">
             <label>
@@ -80,7 +80,14 @@
             <li>gruppi e attività premium</li>
             <li>insight avanzati</li>
           </ul>
-          <a class="btn btn-primary" href="#partner" data-school-plan="school_starter" data-school-size="fino a 400 studenti">Paga e attiva Starter</a>
+          <button
+            type="button"
+            class="btn btn-primary"
+            data-school-plan="school_starter"
+            data-school-size="fino a 400 studenti"
+          >
+            Paga e attiva Starter
+          </button>
         </article>
 
         <article class="card" style="display:grid; gap:12px;">
@@ -91,9 +98,16 @@
             <li>tutto dello Starter</li>
             <li>report esportabili</li>
             <li>supporto prioritario</li>
-            <li>configurazione più strutturata</li>
+            <li>setup più strutturato</li>
           </ul>
-          <a class="btn btn-primary" href="#partner" data-school-plan="school_pro" data-school-size="da 401 a 1.200 studenti">Paga e attiva Pro</a>
+          <button
+            type="button"
+            class="btn btn-primary"
+            data-school-plan="school_pro"
+            data-school-size="da 401 a 1.200 studenti"
+          >
+            Paga e attiva Pro
+          </button>
         </article>
 
         <article class="card" style="display:grid; gap:12px;">
@@ -116,11 +130,13 @@
         <div class="card" style="display:grid; gap:16px;">
           <div>
             <div class="kicker">Enterprise</div>
-            <h2>Parla con noi per campus grandi o reti scolastiche</h2>
-            <p>Usa questo form solo per Enterprise / multisede. Starter e Pro passano direttamente dal checkout online.</p>
+            <h2>Richiedi proposta per campus grandi o reti scolastiche</h2>
+            <p>Usa questo form solo per Enterprise / multisede.</p>
           </div>
 
           <form id="partner-form" style="display:grid; gap:12px;">
+            <input type="hidden" name="tier" value="custom" />
+
             <label>
               <span>Nome</span>
               <input type="text" name="name" required />
@@ -135,8 +151,6 @@
               <span>Organizzazione</span>
               <input type="text" name="organization" required />
             </label>
-
-            <input type="hidden" name="tier" value="custom" />
 
             <label>
               <span>Obiettivo</span>

@@ -1,183 +1,244 @@
 <!doctype html>
 <html lang="it">
-  <head>
+<head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="icon" type="image/svg+xml" href="/logo-square.svg" />
-  <meta name="theme-color" content="#15364D" />
-  <meta property="og:image" content="/logo-square.svg" />
-  <title>Inclusio — Demo prodotto</title>
-  <meta name="description" content="Esplora la demo di Inclusio: onboarding, gruppi, buddy, check-in e segnalazioni." />
+  <title>Inclusio — app demo</title>
+  <meta name="description" content="Demo interattiva dell'app Inclusio." />
+  <script type="module" src="/src/main.js"></script>
 </head>
-  <body data-page="app">
-    <header class="site-header">
-      <div class="shell nav-row">
-        <a class="brand" href="/">
-          <img class="brand-logo" src="/logo-square.svg" alt="Logo Inclusio" />
-          <span>Inclusio</span>
-        </a>
-        <nav class="nav-links">
-          <a href="/">Home</a>
-          <a href="/pricing">Prezzi</a>
-          <a href="/schools">Scuole</a>
-          <a href="/waitlist">Lista d'attesa</a>
-          <a class="button button-primary button-sm" href="/app">Apri demo</a>
-        </nav>
+<body>
+  <header class="site-header">
+    <div class="container nav-wrap">
+      <a class="brand" href="/">
+        <span class="brand-mark"><img src="/public/logo-square.svg" alt="Logo Inclusio" /></span>
+        <span class="brand-text">Inclusio<small>connessioni che fanno bene</small></span>
+      </a>
+
+      <nav class="nav">
+        <a href="/">Home</a>
+        <a href="/funzioni">Funzioni</a>
+        <a href="/impatto">Impatto</a>
+        <a href="/prezzi">Prezzi</a>
+        <a href="/piattaforma">Piattaforma</a>
+        <a href="/organizzazioni">Organizzazioni</a>
+      </nav>
+
+      <div class="actions">
+        <a class="btn btn-secondary" href="/piattaforma">Torna alla piattaforma</a>
+        <a class="btn btn-primary" href="/prezzi">Prezzi</a>
       </div>
-    </header>
+    </div>
+  </header>
 
+  <main>
+    <section class="hero">
+      <div class="container" style="display:grid; gap:16px;">
+        <div class="kicker">Demo app</div>
+        <h1>Qui si vedono davvero le funzionalità del prodotto.</h1>
+        <p class="lead">
+          Crea un profilo demo e usa il flusso reale già supportato dal backend:
+          onboarding, gruppi, buddy, RSVP, check-in e report.
+        </p>
+        <div id="app-status" class="success-message" aria-live="polite"></div>
+      </div>
+    </section>
 
-    <main class="section app-shell">
-      <div class="shell stack-lg">
-        <div class="section-heading left">
-          <div class="eyebrow">Demo prodotto</div>
-          <h1>Esplora la piattaforma</h1>
-          <p>Onboarding, buddy, gruppi, check-in e segnalazioni in una demo separata dalla parte commerciale.</p>
+    <section class="section">
+      <div class="container" style="max-width:900px;">
+        <div class="card" style="display:grid; gap:16px;">
+          <h2>Crea profilo demo</h2>
+
+          <form id="demo-onboard-form" style="display:grid; gap:12px;">
+            <label>
+              <span>Nome</span>
+              <input type="text" name="name" required />
+            </label>
+
+            <label>
+              <span>Città</span>
+              <input type="text" name="city" placeholder="Bari, Milano, Online..." />
+            </label>
+
+            <label>
+              <span>Comfort sociale</span>
+              <select name="comfort">
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3" selected>3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+              </select>
+            </label>
+
+            <label>
+              <span>Energia sociale</span>
+              <select name="energy">
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3" selected>3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+              </select>
+            </label>
+
+            <label>
+              <span>Interessi (separati da virgola)</span>
+              <input type="text" name="interests" placeholder="lettura, cinema, tecnologia, trekking" />
+            </label>
+
+            <label>
+              <span>Obiettivi (separati da virgola)</span>
+              <input type="text" name="goals" placeholder="amicizia, orientamento, integrazione" />
+            </label>
+
+            <label>
+              <span>Note accessibilità / contesto</span>
+              <textarea name="accessibility" rows="4" placeholder="Preferenze, limiti, note utili..."></textarea>
+            </label>
+
+            <button type="submit" class="btn btn-primary" data-label="Crea profilo demo">Crea profilo demo</button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="app-empty-state">
+      <div class="container">
+        <div class="card">
+          <h2>Prima crea un profilo demo</h2>
+          <p>Dopo la creazione vedrai score, buddy, gruppi suggeriti, gruppi attivi, check-in e report.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="app-live-shell" style="display:none;">
+      <div class="container" style="display:grid; gap:24px;">
+        <div>
+          <h2>Metriche personali</h2>
+          <div id="app-stats" style="display:grid; gap:16px; grid-template-columns:repeat(auto-fit,minmax(180px,1fr));"></div>
         </div>
 
-        <section class="metrics-strip">
-          <article class="metric-card"><span>Gruppi attivi</span><strong id="metric-groups">—</strong></article>
-          <article class="metric-card"><span>Inclusione media</span><strong id="metric-inclusion">—</strong></article>
-          <article class="metric-card"><span>Buddy disponibili</span><strong id="metric-buddies">—</strong></article>
-        </section>
+        <div>
+          <h2>Piano d’azione</h2>
+          <div id="app-action-plan"></div>
+        </div>
 
-        <div class="two-col-layout app-layout">
-          <section class="panel stack-md">
-            <div class="stack-sm">
-              <div class="eyebrow">Profili demo</div>
-              <div id="demo-personas" class="persona-list"></div>
-            </div>
+        <div>
+          <h2>Buddy consigliato</h2>
+          <div id="app-buddy"></div>
+        </div>
 
-            <form id="onboarding-form" class="form-card stack-sm">
-              <h2>Crea il tuo profilo</h2>
-              <label><span>Nome</span><input type="text" name="name" required /></label>
-              <label><span>Città</span><input type="text" name="city" /></label>
-              <label><span>Comfort sociale</span><input type="range" min="1" max="5" name="comfort" value="3" /></label>
-              <label><span>Energia sociale</span><input type="range" min="1" max="5" name="energy" value="3" /></label>
-              <label><span>Accessibilità / note utili</span><textarea name="accessibility" rows="4"></textarea></label>
+        <div>
+          <h2>Gruppi consigliati</h2>
+          <div id="app-recommendations" style="display:grid; gap:16px; grid-template-columns:repeat(auto-fit,minmax(260px,1fr));"></div>
+        </div>
 
-              <div class="stack-xs">
-                <span>Interessi (max 8)</span>
-                <div id="interest-options" class="chip-grid"></div>
-              </div>
+        <div>
+          <h2>I miei gruppi</h2>
+          <div id="app-my-groups" style="display:grid; gap:16px;"></div>
+        </div>
 
-              <div class="stack-xs">
-                <span>Obiettivi</span>
-                <div class="chip-grid">
-                  <label class="chip-option"><input type="checkbox" name="goals" value="fare_amicizia" /><span>Fare amicizia</span></label>
-                  <label class="chip-option"><input type="checkbox" name="goals" value="trovare_gruppo" /><span>Trovare un gruppo</span></label>
-                  <label class="chip-option"><input type="checkbox" name="goals" value="uscire_di_piu" /><span>Uscire di più</span></label>
-                  <label class="chip-option"><input type="checkbox" name="goals" value="costruire_team" /><span>Costruire un team</span></label>
-                </div>
-              </div>
+        <div style="display:grid; gap:24px; grid-template-columns:repeat(auto-fit,minmax(280px,1fr));">
+          <div class="card" style="display:grid; gap:12px;">
+            <h3>Invia check-in</h3>
+            <form id="app-checkin-form" style="display:grid; gap:12px;">
+              <label>
+                <span>Inclusione percepita</span>
+                <select name="included">
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3" selected>3</option>
+                  <option value="4">4</option>
+                  <option value="5">5</option>
+                </select>
+              </label>
 
-              <button class="button button-primary" type="submit">Crea profilo</button>
+              <label>
+                <span>Energia</span>
+                <select name="energy">
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3" selected>3</option>
+                  <option value="4">4</option>
+                  <option value="5">5</option>
+                </select>
+              </label>
+
+              <label>
+                <span>Ansia</span>
+                <select name="anxiety">
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3" selected>3</option>
+                  <option value="4">4</option>
+                  <option value="5">5</option>
+                </select>
+              </label>
+
+              <label>
+                <span>Nota</span>
+                <textarea name="note" rows="4" placeholder="Com’è andata?"></textarea>
+              </label>
+
+              <button type="submit" class="btn btn-primary">Salva check-in</button>
             </form>
-          </section>
+          </div>
 
-          <section id="personal-area" class="panel stack-md">
-            <div id="app-panel" class="hidden stack-lg">
-              <div class="section-heading left">
-                <div class="eyebrow">Area personale</div>
-                <h2 id="welcome-name">Bentornato</h2>
-              </div>
+          <div class="card" style="display:grid; gap:12px;">
+            <h3>Invia report</h3>
+            <form id="app-report-form" style="display:grid; gap:12px;">
+              <label>
+                <span>Severità</span>
+                <select name="severity">
+                  <option value="low">Bassa</option>
+                  <option value="medium" selected>Media</option>
+                  <option value="high">Alta</option>
+                </select>
+              </label>
 
-              <section class="metrics-strip">
-                <article class="metric-card"><span>Belonging score</span><strong id="belonging-score">—</strong></article>
-                <article class="metric-card"><span>Gruppi attivi</span><strong id="joined-groups">—</strong></article>
-                <article class="metric-card"><span>Attività pianificate</span><strong id="planned-activities">—</strong></article>
-                <article class="metric-card"><span>Ansia recente</span><strong id="anxiety-average">—</strong></article>
-              </section>
+              <label>
+                <span>Categoria</span>
+                <input type="text" name="category" placeholder="esclusione, attrito, disagio..." />
+              </label>
 
-              <article class="entity-card">
-                <h3>Profilo</h3>
-                <div id="user-interests" class="tag-row"></div>
-                <p id="user-accessibility" class="muted"></p>
-              </article>
+              <label>
+                <span>Dettagli</span>
+                <textarea name="details" rows="4" placeholder="Descrivi il problema in modo sintetico"></textarea>
+              </label>
 
-              <article class="entity-card">
-                <h3>Prossimi passi suggeriti</h3>
-                <ul id="next-actions" class="reason-list"></ul>
-              </article>
+              <button type="submit" class="btn btn-primary">Invia report</button>
+            </form>
+          </div>
+        </div>
 
-              <article class="entity-card">
-                <h3>Buddy suggerito</h3>
-                <div id="buddy-content"></div>
-              </article>
+        <div style="display:grid; gap:24px; grid-template-columns:repeat(auto-fit,minmax(280px,1fr));">
+          <div>
+            <h2>Ultimi check-in</h2>
+            <div id="app-checkins" style="display:grid; gap:12px;"></div>
+          </div>
 
-              <section class="metrics-strip">
-                <article class="metric-card"><span>Utenti attivi</span><strong id="insight-users">—</strong></article>
-                <article class="metric-card"><span>Inclusione media</span><strong id="insight-average-inclusion">—</strong></article>
-                <article class="metric-card"><span>Segnalazioni aperte</span><strong id="insight-open-reports">—</strong></article>
-                <article class="metric-card"><span>Waitlist</span><strong id="insight-waitlist">—</strong></article>
-              </section>
-
-              <article class="entity-card">
-                <h3>Gruppi consigliati</h3>
-                <div id="recommended-groups" class="stack-sm"></div>
-              </article>
-
-              <article class="entity-card">
-                <h3>I tuoi gruppi</h3>
-                <div id="my-groups" class="stack-sm"></div>
-              </article>
-
-              <div class="two-col-layout">
-                <form id="checkin-form" class="form-card stack-sm">
-                  <h3>Come stai nelle relazioni?</h3>
-                  <label><span>Inclusione</span><input type="range" min="1" max="5" name="included" value="3" /></label>
-                  <label><span>Energia</span><input type="range" min="1" max="5" name="energy" value="3" /></label>
-                  <label><span>Ansia sociale</span><input type="range" min="1" max="5" name="anxiety" value="3" /></label>
-                  <label><span>Nota facoltativa</span><textarea name="note" rows="4"></textarea></label>
-                  <button class="button button-primary" type="submit">Salva check-in</button>
-                </form>
-
-                <form id="report-form" class="form-card stack-sm">
-                  <h3>Segnala un problema</h3>
-                  <label>
-                    <span>Categoria</span>
-                    <select name="category">
-                      <option value="esclusione">Esclusione</option>
-                      <option value="bullismo">Bullismo</option>
-                      <option value="gruppo_chiuso">Gruppo chiuso</option>
-                      <option value="altro">Altro</option>
-                    </select>
-                  </label>
-                  <label>
-                    <span>Gravità</span>
-                    <select name="severity">
-                      <option value="low">Bassa</option>
-                      <option value="medium">Media</option>
-                      <option value="high">Alta</option>
-                    </select>
-                  </label>
-                  <label><span>Descrizione</span><textarea name="details" rows="5"></textarea></label>
-                  <button class="button button-primary" type="submit">Invia segnalazione</button>
-                </form>
-              </div>
-
-              <div class="two-col-layout">
-                <article class="entity-card">
-                  <h3>Check-in recenti</h3>
-                  <div id="recent-checkins" class="stack-sm"></div>
-                </article>
-                <article class="entity-card">
-                  <h3>Segnalazioni recenti</h3>
-                  <div id="recent-reports" class="stack-sm"></div>
-                </article>
-              </div>
-            </div>
-
-            <div id="app-fallback" class="success-box hidden">
-              <div class="eyebrow">Demo non disponibile</div>
-              <h2>La pagina è attiva, ma il backend non sta rispondendo.</h2>
-              <p>Controlla <strong>VITE_API_BASE_URL</strong> su Vercel e verifica che il backend Render sia online.</p>
-            </div>
-          </section>
+          <div>
+            <h2>Ultimi report</h2>
+            <div id="app-reports" style="display:grid; gap:12px;"></div>
+          </div>
         </div>
       </div>
-    </main>
-    <div id="toast" class="toast" aria-live="polite"></div>
-    <script type="module" src="/src/main.js"></script>
-  </body>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-grid">
+      <div>
+        <strong>© 2026 Inclusio</strong><br />
+        <span>Appartenenza concreta per persone, scuole e community.</span>
+      </div>
+      <nav class="muted-links">
+        <a href="/privacy">Privacy</a>
+        <a href="/faq">FAQ</a>
+        <a href="/termini">Termini</a>
+      </nav>
+    </div>
+  </footer>
+</body>
 </html>

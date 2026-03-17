@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Inclusio — prezzi</title>
-  <meta name="description" content="Prezzi Inclusio per utenti singoli e scuole con School Starter, School Pro ed Enterprise." />
+  <meta name="description" content="Prezzi Inclusio per utenti singoli e scuole con CTA Stripe reali e checkout scuole separato." />
   <script type="module" src="/src/main.js"></script>
 </head>
 <body>
@@ -26,7 +26,7 @@
 
       <div class="actions">
         <a class="btn btn-secondary" href="/lista-attesa">Lista d’attesa</a>
-        <a class="btn btn-primary" href="/prezzi">Inizia</a>
+        <a class="btn btn-primary" href="/app">Apri demo</a>
       </div>
     </div>
   </header>
@@ -35,17 +35,17 @@
     <section class="hero">
       <div class="container" style="display:grid; gap:16px;">
         <div class="kicker">Prezzi</div>
-        <h1>Prezzi distinti tra utenti singoli e scuole, con fasce basate sulla dimensione dell’istituto.</h1>
+        <h1>Prezzi distinti per persone singole e scuole, con CTA reali e funnel separati.</h1>
         <p class="lead">
-          Per i singoli resta il checkout diretto del piano Plus.
-          Per le scuole, Starter e Pro si attivano online; Enterprise passa da proposta dedicata.
+          I piani Plus aprono Stripe direttamente. I piani scuola passano dal checkout dedicato
+          nella pagina Organizzazioni, dove raccogli solo i dati minimi prima del pagamento.
         </p>
       </div>
     </section>
 
     <section class="section">
       <div class="container" style="display:grid; gap:20px; grid-template-columns:repeat(auto-fit,minmax(260px,1fr));">
-        <article class="card">
+        <article class="card" style="display:grid; gap:12px;">
           <h3>Solo</h3>
           <p>Per iniziare</p>
           <p><strong>€0 / mese</strong></p>
@@ -55,10 +55,10 @@
             <li>check-in personali</li>
             <li>supporto base</li>
           </ul>
-          <a class="btn btn-secondary" href="/lista-attesa">Inizia gratis</a>
+          <a class="btn btn-secondary" href="/app">Prova la demo</a>
         </article>
 
-        <article class="card">
+        <article class="card" style="display:grid; gap:12px;">
           <h3>Plus</h3>
           <p>Per uso personale continuativo</p>
           <p><strong>€12,90 / mese</strong></p>
@@ -69,9 +69,10 @@
             <li>insight personali avanzati</li>
           </ul>
           <a id="plus-monthly-btn" class="btn btn-primary" href="/lista-attesa">Attiva Plus</a>
+          <p id="plus-monthly-note">Pagamento mensile con Stripe.</p>
         </article>
 
-        <article class="card">
+        <article class="card" style="display:grid; gap:12px;">
           <h3>Plus Annuale</h3>
           <p>Per utenti fidelizzati</p>
           <p><strong>€119 / anno</strong></p>
@@ -82,31 +83,50 @@
             <li>priorità sulle novità</li>
           </ul>
           <a id="plus-annual-btn" class="btn btn-primary" href="/lista-attesa">Attiva Plus Annuale</a>
+          <p id="plus-annual-note">Pagamento annuale con Stripe.</p>
         </article>
       </div>
     </section>
 
     <section class="section">
       <div class="container" style="display:grid; gap:20px; grid-template-columns:repeat(auto-fit,minmax(260px,1fr));">
-        <article class="card">
+        <article class="card" style="display:grid; gap:12px;">
           <h3>School Starter</h3>
           <p><strong>Fino a 400 studenti</strong></p>
           <p><strong>€1.990 / anno</strong></p>
-          <a class="btn btn-primary" href="/organizzazioni?tier=school_starter">Attiva School Starter</a>
+          <ul>
+            <li>dashboard istituto</li>
+            <li>onboarding nuovi ingressi</li>
+            <li>gruppi e attività premium</li>
+            <li>insight avanzati</li>
+          </ul>
+          <a class="btn btn-primary" href="/organizzazioni?tier=school_starter">Vai al checkout scuole</a>
         </article>
 
-        <article class="card">
+        <article class="card" style="display:grid; gap:12px;">
           <h3>School Pro</h3>
           <p><strong>Da 401 a 1.200 studenti</strong></p>
           <p><strong>€3.990 / anno</strong></p>
-          <a class="btn btn-primary" href="/organizzazioni?tier=school_pro">Attiva School Pro</a>
+          <ul>
+            <li>tutto dello Starter</li>
+            <li>report esportabili</li>
+            <li>supporto prioritario</li>
+            <li>setup più strutturato</li>
+          </ul>
+          <a class="btn btn-primary" href="/organizzazioni?tier=school_pro">Vai al checkout scuole</a>
         </article>
 
-        <article class="card">
+        <article class="card" style="display:grid; gap:12px;">
           <h3>Campus / Enterprise</h3>
           <p><strong>Oltre 1.200 studenti o multisede</strong></p>
           <p><strong>Preventivo</strong></p>
-          <a class="btn btn-secondary" href="/organizzazioni?tier=custom">Richiedi proposta</a>
+          <ul>
+            <li>multi-campus</li>
+            <li>setup personalizzato</li>
+            <li>accordi dedicati</li>
+            <li>governance avanzata</li>
+          </ul>
+          <a class="btn btn-secondary" href="/organizzazioni#partner">Richiedi proposta</a>
         </article>
       </div>
     </section>

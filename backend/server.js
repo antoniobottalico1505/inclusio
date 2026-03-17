@@ -48,7 +48,7 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
       const planCode = normalizePlanCode(session.metadata?.planCode);
       const customerEmail = email(session.customer_email || session.metadata?.billingEmail);
       const organization = text(session.metadata?.organization, 120);
-      const schoolSize = text(session.metadata?.schoolSize, 40);
+      const schoolSize = text(session.metadata?.schoolSize, 60);
 
       if (['school_starter', 'school_pro'].includes(planCode) && isValidEmail(customerEmail)) {
         const db = readDb();
@@ -399,7 +399,7 @@ function activateSubscriptionRecord(db, payload) {
     status: 'active',
     source: text(payload.source, 40) || 'manual',
     organization: text(payload.organization, 120),
-    schoolSize: text(payload.schoolSize, 40),
+    schoolSize: text(payload.schoolSize, 60),
     stripeCustomerId: text(payload.stripeCustomerId, 80),
     stripeSubscriptionId: text(payload.stripeSubscriptionId, 80),
     checkoutSessionId: text(payload.checkoutSessionId, 80),
@@ -420,7 +420,7 @@ function activateSubscriptionRecord(db, payload) {
       current.billingEmail = emailValue;
       current.planCode = planCode;
       current.planLabel = getPlanLabel(planCode);
-      current.schoolSize = text(payload.schoolSize, 40);
+      current.schoolSize = text(payload.schoolSize, 60);
       current.status = 'active';
       current.activatedAt = now;
       current.stripeCustomerId = text(payload.stripeCustomerId, 80);
@@ -432,7 +432,7 @@ function activateSubscriptionRecord(db, payload) {
         billingEmail: emailValue,
         planCode,
         planLabel: getPlanLabel(planCode),
-        schoolSize: text(payload.schoolSize, 40),
+        schoolSize: text(payload.schoolSize, 60),
         status: 'active',
         createdAt: now,
         activatedAt: now,
@@ -476,7 +476,10 @@ function getActiveSubscription(db, criteria = {}) {
       const orgMatch = wantedOrg ? slugify(item.organization || '') === wantedOrg : true;
       return emailMatch && orgMatch;
     })
-    .sort((a, b) => new Date(b.activatedAt || b.createdAt || 0) - new Date(a.activatedAt || a.createdAt || 0))[0] || null;
+    .sort(
+      (a, b) =>
+        new Date(b.activatedAt || b.createdAt || 0) - new Date(a.activatedAt || a.createdAt || 0)
+    )[0] || null;
 }
 
 function getUserById(db, userId) {
@@ -695,7 +698,7 @@ function computeInsights(db) {
       id: group.id,
       name: group.name,
       fillRate: Number(
-        ((group.members || []).length / Math.max(Number(group.sizeLimit || 1), 1)).toFixed(2)
+        (((group.members || []).length / Math.max(Number(group.sizeLimit || 1), 1))).toFixed(2)
       ),
       spotsLeft: Math.max(Number(group.sizeLimit || 0) - (group.members || []).length, 0)
     }))
@@ -772,7 +775,7 @@ app.get('/', (req, res) => {
   res.status(200).json({
     ok: true,
     service: 'inclusio-api',
-    message: "Backend attivo. Il frontend pubblico è pensato per Vercel.",
+    message: 'Backend attivo. Il frontend pubblico è pensato per Vercel.',
     endpoints: [
       '/api/health',
       '/api/bootstrap',
@@ -813,9 +816,7 @@ app.get('/api/billing/status', (req, res) => {
   const organization = text(req.query.organization, 120);
 
   if (!emailValue && !organization) {
-    return res.status(400).json({
-      error: 'Passa almeno email o organization.'
-    });
+    return res.status(400).json({ error: 'Passa almeno email o organization.' });
   }
 
   const subscription = getActiveSubscription(db, {
@@ -853,27 +854,21 @@ app.post('/api/billing/school-checkout', async (req, res) => {
   const organization = text(req.body.organization, 120);
   const billingEmail = email(req.body.billingEmail || req.body.email);
   const contactName = text(req.body.contactName || req.body.name, 80);
-  const schoolSize = text(req.body.schoolSize, 40);
+  const schoolSize = text(req.body.schoolSize, 60);
   const planCode = normalizePlanCode(req.body.planCode);
 
   if (!organization || !isValidEmail(billingEmail)) {
-    return res.status(400).json({
-      error: 'Inserisci nome scuola ed email di fatturazione validi.'
-    });
+    return res.status(400).json({ error: 'Inserisci nome scuola ed email di fatturazione validi.' });
   }
 
   if (!['school_starter', 'school_pro'].includes(planCode)) {
-    return res.status(400).json({
-      error: 'Per questa fascia è necessario usare Starter o Pro.'
-    });
+    return res.status(400).json({ error: 'Per questa fascia è necessario usare Starter o Pro.' });
   }
 
   const priceId = getSchoolPriceId(planCode);
 
   if (!priceId) {
-    return res.status(500).json({
-      error: 'Prezzo Stripe del piano scuola non configurato.'
-    });
+    return res.status(500).json({ error: 'Prezzo Stripe del piano scuola non configurato.' });
   }
 
   try {
@@ -910,9 +905,7 @@ app.post('/api/billing/school-checkout', async (req, res) => {
     });
   } catch (error) {
     console.error('School checkout create failed:', error);
-    return res.status(500).json({
-      error: 'Impossibile creare il checkout Stripe.'
-    });
+    return res.status(500).json({ error: 'Impossibile creare il checkout Stripe.' });
   }
 });
 
@@ -1192,7 +1185,15 @@ app.post('/api/partner-leads', async (req, res) => {
   const emailValue = email(req.body.email);
   const organization = text(req.body.organization, 80);
   const tierInput = text(req.body.tier, 40).toLowerCase();
-  const tier = ['starter', 'pro', 'campus', 'custom'].includes(tierInput) ? tierInput : 'custom';
+  const tierMap = {
+    school_starter: 'starter',
+    school_pro: 'pro',
+    starter: 'starter',
+    pro: 'pro',
+    campus: 'campus',
+    custom: 'custom'
+  };
+  const tier = tierMap[tierInput] || 'custom';
   const goal = text(req.body.goal, 60);
   const message = text(req.body.message, 400);
 
@@ -1244,9 +1245,9 @@ app.post('/api/partner-leads', async (req, res) => {
     ok: true,
     message:
       tier === 'pro'
-        ? 'Richiesta Pro ricevuta. Ti contatteremo per demo e setup avanzato.'
+        ? 'Richiesta Pro ricevuta. Ti contatteremo per setup avanzato.'
         : tier === 'starter'
-        ? 'Richiesta Starter ricevuta. Ti contatteremo per demo e setup iniziale.'
+        ? 'Richiesta Starter ricevuta. Ti contatteremo per setup iniziale.'
         : 'Richiesta Enterprise ricevuta. Ti contatteremo per proposta personalizzata.'
   });
 });
