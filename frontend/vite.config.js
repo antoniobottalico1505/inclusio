@@ -6,12 +6,9 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),
-        funzioni: resolve(__dirname, 'funzioni.html'),
-        impatto: resolve(__dirname, 'impatto.html'),
-        prezzi: resolve(__dirname, 'prezzi.html'),
-        piattaforma: resolve(__dirname, 'piattaforma.html'),
-        organizzazioni: resolve(__dirname, 'organizzazioni.html'),
-        listaAttesa: resolve(__dirname, 'lista-attesa.html'),
+        faq: resolve(__dirname, 'faq.html'),
+        privacy: resolve(__dirname, 'privacy.html'),
+        termini: resolve(__dirname, 'termini.html')
       }
     }
   }
