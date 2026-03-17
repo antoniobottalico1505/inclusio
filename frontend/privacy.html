@@ -1,23 +1,20 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="it">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Privacy — Inclusio</title>
-  <meta
-    name="description"
-    content="Informativa privacy di Inclusio: quali dati vengono raccolti, per quali finalità, per quanto tempo e quali diritti può esercitare l’utente."
-  />
-  <link rel="stylesheet" href="/src/styles.css" />
+  <meta name="description" content="Informativa privacy di Inclusio." />
   <script type="module" src="/src/main.js"></script>
 </head>
 <body>
   <header class="site-header">
     <div class="container nav-wrap">
       <a class="brand" href="/">
-        <span class="brand-mark"><img src="/logo-square.svg" alt="Logo Inclusio" /></span>
+        <span class="brand-mark"><img src="/public/logo-square.svg" alt="Logo Inclusio" /></span>
         <span class="brand-text">Inclusio<small>connessioni che fanno bene</small></span>
       </a>
+
       <nav class="nav">
         <a href="/">Home</a>
         <a href="/funzioni">Funzioni</a>
@@ -26,6 +23,7 @@
         <a href="/piattaforma">Piattaforma</a>
         <a href="/organizzazioni">Organizzazioni</a>
       </nav>
+
       <div class="actions">
         <a class="btn btn-secondary" href="/lista-attesa">Lista d’attesa</a>
         <a class="btn btn-primary" href="/prezzi">Inizia</a>
@@ -35,107 +33,87 @@
 
   <main>
     <section class="section">
-      <div class="container">
-        <div class="section-head">
-          <span class="eyebrow">Privacy</span>
-          <h1>Informativa privacy</h1>
-          <p class="lead">
-            Questa pagina descrive in modo chiaro quali dati può trattare Inclusio,
-            per quali finalità e quali diritti può esercitare chi usa il sito o invia una richiesta.
-          </p>
+      <div class="container" style="max-width:920px; display:grid; gap:18px;">
+        <div class="kicker">Privacy</div>
+        <h1>Informativa privacy</h1>
+        <p>
+          Questa pagina descrive in modo chiaro quali dati può trattare Inclusio, per quali finalità
+          e quali diritti può esercitare chi usa il sito o invia una richiesta.
+        </p>
+        <p><strong>Ultimo aggiornamento:</strong> 17 marzo 2026</p>
+
+        <div class="card" style="display:grid; gap:8px;">
+          <h2>0. Titolare del trattamento</h2>
+          <p><strong>Denominazione sociale:</strong> [INSERISCI DENOMINAZIONE SOCIALE]</p>
+          <p><strong>Partita IVA / Codice fiscale:</strong> [INSERISCI P.IVA O C.F.]</p>
+          <p><strong>Sede legale:</strong> [INSERISCI INDIRIZZO COMPLETO]</p>
+          <p><strong>Email privacy:</strong> [INSERISCI EMAIL PRIVACY]</p>
+          <p><strong>PEC:</strong> [INSERISCI PEC]</p>
+          <p><strong>REA / Registro Imprese:</strong> [INSERISCI DATI CAMERALE, SE PRESENTI]</p>
+          <p><strong>DPO / Referente privacy:</strong> [INSERISCI NOMINATIVO O “NON NOMINATO”]</p>
         </div>
 
-        <div class="card stack">
-          <p><strong>Ultimo aggiornamento:</strong> 17 marzo 2026</p>
-          <p>
-            L’informativa si applica alle interazioni con il sito Inclusio, ai moduli di contatto,
-            alla lista d’attesa, alle richieste demo e ai percorsi di attivazione per persone,
-            scuole, community e organizzazioni.
-          </p>
-        </div>
+        <h2>1. Ambito di applicazione</h2>
+        <p>
+          L’informativa si applica alle interazioni con il sito Inclusio, ai moduli di contatto,
+          alla lista d’attesa, alle richieste demo, ai checkout School Starter / School Pro
+          e ai percorsi di attivazione per persone, scuole, community e organizzazioni.
+        </p>
 
-        <div class="grid-2">
-          <article class="card stack">
-            <h2>1. Dati che possono essere raccolti</h2>
-            <p>
-              Inclusio può raccogliere dati identificativi e di contatto, come nome, email,
-              città, organizzazione di appartenenza e informazioni inserite volontariamente nei form.
-            </p>
-            <p>
-              Possono inoltre essere trattati dati relativi a interessi, obiettivi,
-              preferenze dichiarate e contenuti necessari a gestire richieste di accesso,
-              demo, onboarding o attivazione del servizio.
-            </p>
-          </article>
+        <h2>2. Dati che possono essere raccolti</h2>
+        <p>
+          Inclusio può raccogliere dati identificativi e di contatto, come nome, email, città,
+          organizzazione di appartenenza, email di fatturazione, dati inseriti volontariamente nei form
+          e, nel caso di checkout, dati fiscali e di pagamento gestiti tramite Stripe.
+        </p>
 
-          <article class="card stack">
-            <h2>2. Finalità del trattamento</h2>
-            <p>I dati possono essere usati per:</p>
-            <ul>
-              <li>gestire iscrizioni, richieste e candidature alla lista d’attesa;</li>
-              <li>rispondere a richieste commerciali o di supporto;</li>
-              <li>organizzare demo, setup e attivazione di servizi partner o B2B;</li>
-              <li>migliorare il prodotto, i flussi di onboarding e l’esperienza utente;</li>
-              <li>inviare comunicazioni operative legate alla richiesta effettuata.</li>
-            </ul>
-          </article>
+        <h2>3. Finalità del trattamento</h2>
+        <ul>
+          <li>gestire iscrizioni, richieste e candidature alla lista d’attesa;</li>
+          <li>rispondere a richieste commerciali o di supporto;</li>
+          <li>organizzare demo, setup e attivazione di servizi partner o B2B;</li>
+          <li>attivare School Starter e School Pro dopo pagamento andato a buon fine;</li>
+          <li>migliorare il prodotto, i flussi di onboarding e l’esperienza utente;</li>
+          <li>inviare comunicazioni operative legate alla richiesta effettuata.</li>
+        </ul>
 
-          <article class="card stack">
-            <h2>3. Base del trattamento</h2>
-            <p>
-              Il trattamento può basarsi sull’esecuzione di misure precontrattuali richieste
-              dall’utente, sull’esecuzione del servizio, su obblighi di legge oppure,
-              quando necessario, sul consenso espresso dall’interessato.
-            </p>
-          </article>
+        <h2>4. Base giuridica</h2>
+        <p>
+          Il trattamento può basarsi sull’esecuzione di misure precontrattuali richieste dall’utente,
+          sull’esecuzione del servizio, su obblighi di legge oppure, quando necessario, sul consenso espresso.
+        </p>
 
-          <article class="card stack">
-            <h2>4. Conservazione dei dati</h2>
-            <p>
-              I dati sono conservati per il tempo strettamente necessario a gestire le finalità
-              per cui sono stati raccolti, a fornire il servizio, a seguire richieste commerciali
-              o a rispettare eventuali obblighi normativi applicabili.
-            </p>
-          </article>
+        <h2>5. Conservazione dei dati</h2>
+        <p>
+          I dati sono conservati per il tempo strettamente necessario a gestire le finalità per cui sono stati raccolti,
+          a fornire il servizio, a seguire richieste commerciali o a rispettare eventuali obblighi normativi applicabili.
+        </p>
 
-          <article class="card stack">
-            <h2>5. Condivisione dei dati</h2>
-            <p>
-              I dati non vengono diffusi pubblicamente. Possono essere trattati da soggetti
-              che supportano il funzionamento tecnico, organizzativo o commerciale di Inclusio,
-              nei limiti necessari all’erogazione del servizio o alla gestione delle richieste.
-            </p>
-          </article>
+        <h2>6. Condivisione dei dati</h2>
+        <p>
+          I dati non vengono diffusi pubblicamente. Possono essere trattati da soggetti che supportano il funzionamento tecnico,
+          organizzativo o commerciale di Inclusio, inclusi fornitori di pagamento e infrastruttura, nei limiti necessari
+          all’erogazione del servizio o alla gestione delle richieste.
+        </p>
 
-          <article class="card stack">
-            <h2>6. Diritti dell’interessato</h2>
-            <p>
-              L’utente può chiedere accesso, rettifica, aggiornamento, cancellazione,
-              limitazione del trattamento o opposizione, nei limiti previsti dalla normativa applicabile.
-            </p>
-            <p>
-              Per esercitare questi diritti è opportuno usare il contatto ufficiale indicato dal progetto
-              o nella sezione contatti del sito.
-            </p>
-          </article>
+        <h2>7. Diritti dell’interessato</h2>
+        <p>
+          L’utente può chiedere accesso, rettifica, aggiornamento, cancellazione, limitazione del trattamento o opposizione,
+          nei limiti previsti dalla normativa applicabile.
+        </p>
 
-          <article class="card stack">
-            <h2>7. Minori e contesti educativi</h2>
-            <p>
-              Nei casi in cui Inclusio venga adottato in contesti scolastici, universitari o educativi,
-              la configurazione del servizio può richiedere misure organizzative aggiuntive,
-              informative dedicate e definizione dei ruoli tra le parti coinvolte.
-            </p>
-          </article>
+        <h2>8. Minori e contesti educativi</h2>
+        <p>
+          Nei casi in cui Inclusio venga adottato in contesti scolastici, universitari o educativi,
+          la configurazione del servizio può richiedere misure organizzative aggiuntive,
+          informative dedicate e definizione dei ruoli tra le parti coinvolte.
+        </p>
 
-          <article class="card stack">
-            <h2>8. Aggiornamenti</h2>
-            <p>
-              Inclusio può aggiornare questa informativa per riflettere evoluzioni del servizio,
-              modifiche organizzative o cambi normativi. La versione pubblicata sul sito è quella di riferimento.
-            </p>
-          </article>
-        </div>
+        <h2>9. Aggiornamenti</h2>
+        <p>
+          Inclusio può aggiornare questa informativa per riflettere evoluzioni del servizio,
+          modifiche organizzative o cambi normativi. La versione pubblicata sul sito è quella di riferimento.
+        </p>
       </div>
     </section>
   </main>
@@ -143,13 +121,14 @@
   <footer class="footer">
     <div class="container footer-grid">
       <div>
-        <strong>© 2026 Inclusio</strong>
+        <strong>© 2026 Inclusio</strong><br />
+        <span>Appartenenza concreta per persone, scuole e community.</span>
       </div>
-      <div class="muted-links">
+      <nav class="muted-links">
         <a href="/privacy">Privacy</a>
         <a href="/faq">FAQ</a>
         <a href="/termini">Termini</a>
-      </div>
+      </nav>
     </div>
   </footer>
 </body>

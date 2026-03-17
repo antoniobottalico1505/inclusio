@@ -1,25 +1,131 @@
 const nodemailer = require('nodemailer');
+const Stripe = require('stripe');
 const express = require('express');
+
 const path = require('path');
+
 const fs = require('fs');
 
 const app = express();
+
 const PORT = Number(process.env.PORT || 3000);
+
 const HOST = '0.0.0.0';
 
 const DB_PATH = path.join(__dirname, 'data', 'db.json');
+
 const SEED_PATH = path.join(__dirname, 'data', 'seed.json');
 
 const OWNER_EMAIL = process.env.OWNER_EMAIL || '';
+
 const GMAIL_USER = process.env.GMAIL_USER || '';
+
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || '';
 const APP_BASE_URL = process.env.APP_BASE_URL || '';
+
 const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
+
 const SMTP_PORT = Number(process.env.SMTP_PORT || 465);
+
 const SMTP_SECURE = String(process.env.SMTP_SECURE || 'true') === 'true';
+
 const BILLING_ADMIN_TOKEN = process.env.BILLING_ADMIN_TOKEN || '';
 
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
+const STRIPE_PRICE_SCHOOL_STARTER_YEARLY = process.env.STRIPE_PRICE_SCHOOL_STARTER_YEARLY || '';
+const STRIPE_PRICE_SCHOOL_PRO_YEARLY = process.env.STRIPE_PRICE_SCHOOL_PRO_YEARLY || '';
+
+const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
+
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  if (!stripe || !STRIPE_WEBHOOK_SECRET) {
+    return res.status(500).json({ error: 'Stripe webhook non configurato.' });
+  }
+
+  const signature = req.headers['stripe-signature'];
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(req.body, signature, STRIPE_WEBHOOK_SECRET);
+  } catch (error) {
+    return res.status(400).send(`Webhook Error: ${error.message}`);
+  }
+
+  try {
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object;
+      const planCode = normalizePlanCode(session.metadata?.planCode);
+      const customerEmail = email(session.customer_email || session.metadata?.billingEmail);
+      const organization = text(session.metadata?.organization, 120);
+      const schoolSize = text(session.metadata?.schoolSize, 40);
+
+      if (['school_starter', 'school_pro'].includes(planCode) && isValidEmail(customerEmail)) {
+        const db = readDb();
+
+        const activated = activateSubscriptionRecord(db, {
+          email: customerEmail,
+          planCode,
+          source: 'stripe_checkout',
+          organization,
+          schoolSize,
+          stripeCustomerId: text(session.customer, 80),
+          stripeSubscriptionId: text(session.subscription, 80),
+          checkoutSessionId: text(session.id, 80)
+        });
+
+        writeDb(db);
+
+        await Promise.all([
+          safeSendEmail({
+            to: OWNER_EMAIL,
+            subject: `[Inclusio] Scuola attivata — ${organization || customerEmail}`,
+            html: `
+              <h2>Pagamento scuola completato</h2>
+              <p><strong>Organizzazione:</strong> ${esc(organization || 'Non indicata')}</p>
+              <p><strong>Email fatturazione:</strong> ${esc(customerEmail)}</p>
+              <p><strong>Piano:</strong> ${esc(getPlanLabel(planCode))}</p>
+              <p><strong>Dimensione:</strong> ${esc(schoolSize || 'Non indicata')}</p>
+              <p><strong>Subscription ID:</strong> ${esc(session.subscription || 'n/d')}</p>
+            `
+          }),
+          safeSendEmail({
+            to: customerEmail,
+            subject: 'Inclusio — attivazione scuola completata',
+            html: `
+              <h2>Attivazione completata</h2>
+              <p>Ciao,</p>
+              <p>il pagamento per <strong>${esc(organization || 'la tua organizzazione')}</strong> è stato registrato correttamente.</p>
+              <p><strong>Piano attivo:</strong> ${esc(activated.planLabel)}</p>
+              <p><strong>Fascia dimensionale:</strong> ${esc(schoolSize || 'Non indicata')}</p>
+              <p><a href="${APP_BASE_URL}/organizzazioni">Torna alla pagina scuole</a></p>
+            `
+          })
+        ]);
+      }
+    }
+
+    if (event.type === 'customer.subscription.deleted') {
+      const subscription = event.data.object;
+      const db = readDb();
+
+      deactivateSubscriptionRecord(db, {
+        stripeSubscriptionId: text(subscription.id, 80),
+        status: 'canceled'
+      });
+
+      writeDb(db);
+    }
+
+    return res.json({ received: true });
+  } catch (error) {
+    console.error('Stripe webhook failed:', error);
+    return res.status(500).json({ error: 'Elaborazione webhook non riuscita.' });
+  }
+});
+
 app.use(express.json({ limit: '1mb' }));
+
 app.use(express.urlencoded({ extended: true }));
 
 const allowedOrigins = (process.env.CORS_ORIGIN || '')
@@ -62,9 +168,13 @@ function baseDbShape() {
     checkins: [],
     reports: [],
     waitlist: [],
-    partnerLeads: [],
-    subscriptions: [],
-    marketing: {
+partnerLeads: [],
+
+subscriptions: [],
+
+organizations: [],
+
+marketing: {
       plans: [],
       faqs: []
     }
@@ -89,8 +199,12 @@ function normalizeDb(raw) {
   db.reports = Array.isArray(db.reports) ? db.reports : [];
   db.waitlist = Array.isArray(db.waitlist) ? db.waitlist : [];
   db.partnerLeads = Array.isArray(db.partnerLeads) ? db.partnerLeads : [];
-  db.subscriptions = Array.isArray(db.subscriptions) ? db.subscriptions : [];
-  db.marketing.plans = Array.isArray(db.marketing.plans) ? db.marketing.plans : [];
+
+db.subscriptions = Array.isArray(db.subscriptions) ? db.subscriptions : [];
+
+db.organizations = Array.isArray(db.organizations) ? db.organizations : [];
+
+db.marketing.plans = Array.isArray(db.marketing.plans) ? db.marketing.plans : [];
   db.marketing.faqs = Array.isArray(db.marketing.faqs) ? db.marketing.faqs : [];
 
   db.groups = db.groups.map((group) => ({
@@ -191,6 +305,10 @@ function normalizePlanCode(value) {
   if (['plus', 'plus_monthly', 'monthly', 'mensile'].includes(code)) return 'plus_monthly';
   if (['plus_annual', 'annual', 'annuale'].includes(code)) return 'plus_annual';
 
+  if (['school_starter', 'starter', 'scuola_starter'].includes(code)) return 'school_starter';
+  if (['school_pro', 'pro', 'scuola_pro'].includes(code)) return 'school_pro';
+  if (['custom', 'enterprise', 'campus', 'school_enterprise'].includes(code)) return 'custom';
+
   return 'solo';
 }
 
@@ -199,26 +317,203 @@ function getPlanLabel(planCode = 'solo') {
 
   if (normalized === 'plus_annual') return 'Plus Annuale';
   if (normalized === 'plus_monthly') return 'Plus Mensile';
+  if (normalized === 'school_starter') return 'School Starter';
+  if (normalized === 'school_pro') return 'School Pro';
+  if (normalized === 'custom') return 'Campus / Enterprise';
 
   return 'Solo';
 }
 
 function getPlanEntitlements(planCode = 'solo') {
   const normalized = normalizePlanCode(planCode);
+
+  if (normalized === 'school_starter') {
+    return {
+      planCode: normalized,
+      planLabel: getPlanLabel(normalized),
+      isPaid: true,
+      isB2B: true,
+      maxGroups: 999,
+      buddyMatches: 999,
+      premiumGroups: true,
+      premiumActivities: true,
+      advancedInsights: true,
+      priorityIntroductions: true,
+      supportLevel: 'priority',
+      orgDashboard: true,
+      exports: false,
+      multiCampus: false,
+      schoolSizeBand: 'fino a 400 studenti'
+    };
+  }
+
+  if (normalized === 'school_pro') {
+    return {
+      planCode: normalized,
+      planLabel: getPlanLabel(normalized),
+      isPaid: true,
+      isB2B: true,
+      maxGroups: 999,
+      buddyMatches: 999,
+      premiumGroups: true,
+      premiumActivities: true,
+      advancedInsights: true,
+      priorityIntroductions: true,
+      supportLevel: 'priority',
+      orgDashboard: true,
+      exports: true,
+      multiCampus: true,
+      schoolSizeBand: 'da 401 a 1.200 studenti'
+    };
+  }
+
+  if (normalized === 'custom') {
+    return {
+      planCode: normalized,
+      planLabel: getPlanLabel(normalized),
+      isPaid: true,
+      isB2B: true,
+      maxGroups: 999,
+      buddyMatches: 999,
+      premiumGroups: true,
+      premiumActivities: true,
+      advancedInsights: true,
+      priorityIntroductions: true,
+      supportLevel: 'enterprise',
+      orgDashboard: true,
+      exports: true,
+      multiCampus: true,
+      schoolSizeBand: 'oltre 1.200 studenti / multisede'
+    };
+  }
+
   const isPaid = normalized === 'plus_monthly' || normalized === 'plus_annual';
 
   return {
     planCode: normalized,
     planLabel: getPlanLabel(normalized),
     isPaid,
+    isB2B: false,
     maxGroups: isPaid ? 3 : 1,
     buddyMatches: isPaid ? 3 : 1,
     premiumGroups: isPaid,
     premiumActivities: isPaid,
     advancedInsights: isPaid,
     priorityIntroductions: isPaid,
-    supportLevel: isPaid ? 'priority' : 'base'
+    supportLevel: isPaid ? 'priority' : 'base',
+    orgDashboard: false,
+    exports: false,
+    multiCampus: false,
+    schoolSizeBand: null
   };
+}
+
+function getSchoolPriceId(planCode) {
+  const normalized = normalizePlanCode(planCode);
+
+  if (normalized === 'school_starter') return STRIPE_PRICE_SCHOOL_STARTER_YEARLY;
+  if (normalized === 'school_pro') return STRIPE_PRICE_SCHOOL_PRO_YEARLY;
+
+  return '';
+}
+
+function activateSubscriptionRecord(db, payload) {
+  const emailValue = email(payload.email);
+  const planCode = normalizePlanCode(payload.planCode);
+  const now = new Date().toISOString();
+
+  if (!isValidEmail(emailValue)) {
+    throw new Error('Email di fatturazione non valida.');
+  }
+
+  if (!Array.isArray(db.subscriptions)) db.subscriptions = [];
+  if (!Array.isArray(db.organizations)) db.organizations = [];
+
+  db.subscriptions.forEach((item) => {
+    if (
+      email(item.email) === emailValue &&
+      String(item.status || '').toLowerCase() === 'active' &&
+      normalizePlanCode(item.planCode || item.plan) !== 'solo'
+    ) {
+      item.status = 'replaced';
+      item.replacedAt = now;
+    }
+  });
+
+  const record = {
+    id: makeId('sub'),
+    email: emailValue,
+    planCode,
+    planLabel: getPlanLabel(planCode),
+    status: 'active',
+    source: text(payload.source, 40) || 'manual',
+    organization: text(payload.organization, 120),
+    schoolSize: text(payload.schoolSize, 40),
+    stripeCustomerId: text(payload.stripeCustomerId, 80),
+    stripeSubscriptionId: text(payload.stripeSubscriptionId, 80),
+    checkoutSessionId: text(payload.checkoutSessionId, 80),
+    createdAt: now,
+    activatedAt: now
+  };
+
+  db.subscriptions.unshift(record);
+
+  if (['school_starter', 'school_pro', 'custom'].includes(planCode)) {
+    const orgKey = slugify(payload.organization || emailValue);
+    const current = db.organizations.find((item) => slugify(item.name || item.billingEmail) === orgKey);
+
+    if (current) {
+      current.name = text(payload.organization, 120) || current.name;
+      current.billingEmail = emailValue;
+      current.planCode = planCode;
+      current.planLabel = getPlanLabel(planCode);
+      current.schoolSize = text(payload.schoolSize, 40);
+      current.status = 'active';
+      current.activatedAt = now;
+      current.stripeCustomerId = text(payload.stripeCustomerId, 80);
+      current.stripeSubscriptionId = text(payload.stripeSubscriptionId, 80);
+    } else {
+      db.organizations.unshift({
+        id: makeId('org'),
+        name: text(payload.organization, 120),
+        billingEmail: emailValue,
+        planCode,
+        planLabel: getPlanLabel(planCode),
+        schoolSize: text(payload.schoolSize, 40),
+        status: 'active',
+        createdAt: now,
+        activatedAt: now,
+        stripeCustomerId: text(payload.stripeCustomerId, 80),
+        stripeSubscriptionId: text(payload.stripeSubscriptionId, 80)
+      });
+    }
+  }
+
+  return record;
+}
+
+function deactivateSubscriptionRecord(db, payload) {
+  if (!Array.isArray(db.subscriptions)) return;
+
+  const subscriptionId = text(payload.stripeSubscriptionId, 80);
+  const nextStatus = text(payload.status, 20) || 'canceled';
+  const now = new Date().toISOString();
+
+  db.subscriptions.forEach((item) => {
+    if (subscriptionId && text(item.stripeSubscriptionId, 80) === subscriptionId) {
+      item.status = nextStatus;
+      item.deactivatedAt = now;
+    }
+  });
+
+  if (Array.isArray(db.organizations)) {
+    db.organizations.forEach((item) => {
+      if (subscriptionId && text(item.stripeSubscriptionId, 80) === subscriptionId) {
+        item.status = nextStatus;
+        item.deactivatedAt = now;
+      }
+    });
+  }
 }
 
 function getActiveSubscriptionByEmail(db, emailValue) {
@@ -883,6 +1178,69 @@ app.post('/api/waitlist', async (req, res) => {
     ok: true,
     message: 'Iscrizione completata. Ti aggiorneremo presto.'
   });
+});
+
+app.post('/api/billing/school-checkout', async (req, res) => {
+  if (!stripe) {
+    return res.status(500).json({ error: 'Stripe non configurato sul backend.' });
+  }
+
+  const organization = text(req.body.organization, 120);
+  const billingEmail = email(req.body.billingEmail || req.body.email);
+  const contactName = text(req.body.contactName || req.body.name, 80);
+  const schoolSize = text(req.body.schoolSize, 40);
+  const planCode = normalizePlanCode(req.body.planCode);
+
+  if (!organization || !isValidEmail(billingEmail)) {
+    return res.status(400).json({ error: 'Inserisci nome scuola ed email di fatturazione validi.' });
+  }
+
+  if (!['school_starter', 'school_pro'].includes(planCode)) {
+    return res.status(400).json({ error: 'Per questa fascia è necessario usare Starter o Pro.' });
+  }
+
+  const priceId = getSchoolPriceId(planCode);
+
+  if (!priceId) {
+    return res.status(500).json({ error: 'Prezzo Stripe del piano scuola non configurato.' });
+  }
+
+  try {
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      customer_email: billingEmail,
+      billing_address_collection: 'required',
+      allow_promotion_codes: true,
+      tax_id_collection: { enabled: true },
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: `${APP_BASE_URL}/organizzazioni?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${APP_BASE_URL}/organizzazioni?checkout=cancelled`,
+      metadata: {
+        planCode,
+        organization,
+        billingEmail,
+        contactName,
+        schoolSize
+      },
+      subscription_data: {
+        metadata: {
+          planCode,
+          organization,
+          billingEmail,
+          contactName,
+          schoolSize
+        }
+      }
+    });
+
+    return res.json({
+      ok: true,
+      url: session.url
+    });
+  } catch (error) {
+    console.error('School checkout create failed:', error);
+    return res.status(500).json({ error: 'Impossibile creare il checkout Stripe.' });
+  }
 });
 
 app.post('/api/partner-leads', async (req, res) => {

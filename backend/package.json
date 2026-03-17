@@ -12,8 +12,9 @@
     "dev": "node server.js",
     "reset:data": "node scripts/reset-data.js"
   },
-  "dependencies": {
-    "express": "^4.21.2",
-    "nodemailer": "^6.10.1"
-  }
+"dependencies": {
+  "express": "^4.21.2",
+  "nodemailer": "^6.10.1",
+  "stripe": "^18.4.0"
+}
 }

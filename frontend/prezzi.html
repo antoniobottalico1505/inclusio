@@ -4,22 +4,26 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Inclusio — prezzi</title>
-  <meta name="description" content="Inclusio aiuta persone, scuole e community a creare appartenenza reale con gruppi curati, introduzioni guidate e percorsi sociali più semplici." />
+  <meta name="description" content="Prezzi Inclusio per utenti singoli e scuole con School Starter, School Pro ed Enterprise." />
   <script type="module" src="/src/main.js"></script>
 </head>
 <body>
   <header class="site-header">
     <div class="container nav-wrap">
       <a class="brand" href="/">
-        <span class="brand-mark"><img src="/public/logo-square.svg" alt="Logo Inclusio con due braccia piegate che uniscono le mani" /></span>
+        <span class="brand-mark"><img src="/public/logo-square.svg" alt="Logo Inclusio" /></span>
         <span class="brand-text">Inclusio<small>connessioni che fanno bene</small></span>
       </a>
-      <nav class="nav"><a href="/" class="">Home</a>
-<a href="/funzioni" class="">Funzioni</a>
-<a href="/impatto" class="">Impatto</a>
-<a href="/prezzi" class="is-active">Prezzi</a>
-<a href="/piattaforma" class="">Piattaforma</a>
-<a href="/organizzazioni" class="">Organizzazioni</a></nav>
+
+      <nav class="nav">
+        <a href="/">Home</a>
+        <a href="/funzioni">Funzioni</a>
+        <a href="/impatto">Impatto</a>
+        <a href="/prezzi" class="is-active">Prezzi</a>
+        <a href="/piattaforma">Piattaforma</a>
+        <a href="/organizzazioni">Organizzazioni</a>
+      </nav>
+
       <div class="actions">
         <a class="btn btn-secondary" href="/lista-attesa">Lista d’attesa</a>
         <a class="btn btn-primary" href="/prezzi">Inizia</a>
@@ -29,91 +33,96 @@
 
   <main>
     <section class="hero">
-      <div class="container hero-grid">
-        <div class="hero-copy">
-          <div class="kicker">Inclusio</div>
-          <h1>Prezzi chiari per utenti singoli. Funnel dedicato per scuole, università e community.</h1>
-          <p class="lead">Per il B2C il checkout può essere diretto. Per scuole e organizzazioni conviene un percorso commerciale dedicato, con demo e proposta.</p>
-          <div class="hero-actions">
-            <a class="btn btn-primary" href="/organizzazioni">Scopri l’offerta scuole</a>
-            <a class="btn btn-secondary" href="/lista-attesa">Richiedi accesso</a>
-          </div>
-        </div>
-        <div class="hero-card">
-          <div class="logo-stage">
-            <img src="/public/logo-square.svg" alt="Logo quadrato Inclusio con due braccia piegate e mani che si incontrano" />
-          </div>
-        </div>
+      <div class="container" style="display:grid; gap:16px;">
+        <div class="kicker">Prezzi</div>
+        <h1>Prezzi distinti tra utenti singoli e scuole, con fasce basate sulla dimensione dell’istituto.</h1>
+        <p class="lead">
+          Per i singoli resta il checkout diretto del piano Plus.
+          Per le scuole, Starter e Pro si attivano online; Enterprise passa da proposta dedicata.
+        </p>
       </div>
     </section>
 
-    
     <section class="section">
-      <div class="container price-grid">
-        <article class="price-card">
+      <div class="container" style="display:grid; gap:20px; grid-template-columns:repeat(auto-fit,minmax(260px,1fr));">
+        <article class="card">
           <h3>Solo</h3>
-          <p class="note">Per iniziare</p>
-          <div class="price"><strong>€0</strong><span>/mese</span></div>
+          <p>Per iniziare</p>
+          <p><strong>€0 / mese</strong></p>
           <ul>
             <li>accesso base ai gruppi aperti</li>
             <li>1 buddy suggerito</li>
             <li>check-in personali</li>
             <li>supporto base</li>
           </ul>
-          <div style="margin-top:18px"><a class="btn btn-secondary" href="/lista-attesa">Inizia gratis</a></div>
+          <a class="btn btn-secondary" href="/lista-attesa">Inizia gratis</a>
         </article>
 
-        <article class="price-card featured">
-          <span class="badge">Consigliato</span>
+        <article class="card">
           <h3>Plus</h3>
-          <p class="note">Per uso personale continuativo</p>
-          <div class="price"><strong>€12,90</strong><span>/mese</span></div>
+          <p>Per uso personale continuativo</p>
+          <p><strong>€12,90 / mese</strong></p>
           <ul>
             <li>cerchi premium</li>
             <li>priorità negli ingressi</li>
             <li>intro curate</li>
             <li>insight personali avanzati</li>
           </ul>
-          <div style="margin-top:18px"><a class="btn btn-primary" href="#">Collega qui il Payment Link Stripe</a></div>
+          <p>Collega qui il Payment Link Stripe mensile.</p>
         </article>
 
-        <article class="price-card">
+        <article class="card">
           <h3>Plus Annuale</h3>
-          <p class="note">Per utenti fidelizzati</p>
-          <div class="price"><strong>€119</strong><span>/anno</span></div>
+          <p>Per utenti fidelizzati</p>
+          <p><strong>€119 / anno</strong></p>
           <ul>
             <li>tutto del Plus</li>
             <li>risparmio rispetto al mensile</li>
             <li>accesso continuativo</li>
             <li>priorità sulle novità</li>
           </ul>
-          <div style="margin-top:18px"><a class="btn btn-secondary" href="#">Collega qui il Payment Link annuale</a></div>
+          <p>Collega qui il Payment Link Stripe annuale.</p>
         </article>
       </div>
     </section>
 
     <section class="section">
-      <div class="container card">
-        <h3>Per scuole e organizzazioni</h3>
-        <p>Le scuole valgono più dei singoli abbonamenti e vanno trattate come clienti B2B: School Starter da €1.990/anno, School Pro da €3.990/anno, Enterprise su preventivo.</p>
-        <a class="btn btn-primary" href="/organizzazioni">Vai al funnel scuole</a>
+      <div class="container" style="display:grid; gap:20px; grid-template-columns:repeat(auto-fit,minmax(260px,1fr));">
+        <article class="card">
+          <h3>School Starter</h3>
+          <p><strong>Fino a 400 studenti</strong></p>
+          <p><strong>€1.990 / anno</strong></p>
+          <a class="btn btn-primary" href="/organizzazioni?tier=school_starter">Attiva School Starter</a>
+        </article>
+
+        <article class="card">
+          <h3>School Pro</h3>
+          <p><strong>Da 401 a 1.200 studenti</strong></p>
+          <p><strong>€3.990 / anno</strong></p>
+          <a class="btn btn-primary" href="/organizzazioni?tier=school_pro">Attiva School Pro</a>
+        </article>
+
+        <article class="card">
+          <h3>Campus / Enterprise</h3>
+          <p><strong>Oltre 1.200 studenti o multisede</strong></p>
+          <p><strong>Preventivo</strong></p>
+          <a class="btn btn-secondary" href="/organizzazioni?tier=custom">Richiedi proposta</a>
+        </article>
       </div>
     </section>
-    
   </main>
 
   <footer class="footer">
     <div class="container footer-grid">
       <div>
-        <strong>Inclusio</strong><br />
+        <strong>© 2026 Inclusio</strong><br />
         <span>Appartenenza concreta per persone, scuole e community.</span>
       </div>
-      <div class="muted-links">
-        <a href="/funzioni">Funzioni</a>
-        <a href="/prezzi">Prezzi</a>
-        <a href="/organizzazioni">Organizzazioni</a>
-        <a href="/lista-attesa">Lista d’attesa</a>
-      </div>
+      <nav class="muted-links">
+        <a href="/privacy">Privacy</a>
+        <a href="/faq">FAQ</a>
+        <a href="/termini">Termini</a>
+      </nav>
     </div>
   </footer>
 </body>

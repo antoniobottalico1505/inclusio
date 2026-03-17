@@ -1,73 +1,36 @@
 import './styles.css';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
-const STRIPE_LINKS = {
-  plus_monthly: import.meta.env.VITE_STRIPE_LINK_PLUS_MONTHLY || '',
-  plus_annual: import.meta.env.VITE_STRIPE_LINK_PLUS_ANNUAL || ''
-};
-
-function getPlanCta(plan) {
-  const code = String(plan?.code || '').trim();
-
-  if (code === 'plus_monthly') {
-    return {
-      href: STRIPE_LINKS.plus_monthly || '#waitlist',
-      label: plan.ctaLabel || 'Attiva Plus mensile',
-      external: Boolean(STRIPE_LINKS.plus_monthly)
-    };
-  }
-
-  if (code === 'plus_annual') {
-    return {
-      href: STRIPE_LINKS.plus_annual || '#waitlist',
-      label: plan.ctaLabel || 'Attiva Plus annuale',
-      external: Boolean(STRIPE_LINKS.plus_annual)
-    };
-  }
-
-  if (code === 'school_starter' || code === 'school_pro' || code === 'custom' || plan.ctaType === 'b2b') {
-    return {
-      href: '#partner',
-      label: plan.ctaLabel || 'Richiedi demo',
-      external: false
-    };
-  }
-
-  return {
-    href: '#platform',
-    label: plan.ctaLabel || 'Inizia gratis',
-    external: false
-  };
-}
-
-function hydratePlanPrefillFromUrl() {
-  const params = new URLSearchParams(window.location.search);
-  const tier = String(params.get('tier') || params.get('plan') || '').trim();
-  const partnerForm = $('#partner-form');
-
-  if (partnerForm && partnerForm.elements?.tier && ['school_starter', 'school_pro', 'custom'].includes(tier)) {
-    partnerForm.elements.tier.value = tier;
-    window.location.hash = 'partner';
-  }
-}
-
 const $ = (selector) => document.querySelector(selector);
 
 async function sendJson(path, body) {
   if (!API_BASE) {
     throw new Error('Configura VITE_API_BASE_URL nel frontend.');
   }
+
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   });
+
   let payload = {};
-  try { payload = await res.json(); } catch {}
+  try {
+    payload = await res.json();
+  } catch {}
+
   if (!res.ok) {
     throw new Error(payload.error || 'Operazione non riuscita.');
   }
+
   return payload;
+}
+
+function showResult(selector, message) {
+  const node = $(selector);
+  if (!node) return;
+  node.textContent = message;
+  node.classList.add('show');
 }
 
 function wireForm(selector, path, successSelector) {
@@ -77,6 +40,7 @@ function wireForm(selector, path, successSelector) {
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
+
     const submit = form.querySelector('button[type="submit"]');
     const data = Object.fromEntries(new FormData(form).entries());
 
@@ -106,8 +70,81 @@ function wireForm(selector, path, successSelector) {
   });
 }
 
+function hydratePlanPrefillFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const tier = String(params.get('tier') || params.get('plan') || '').trim();
+  const partnerForm = $('#partner-form');
+
+  if (partnerForm && partnerForm.elements?.tier && ['school_starter', 'school_pro', 'custom'].includes(tier)) {
+    partnerForm.elements.tier.value = tier;
+  }
+}
+
+function wireSchoolCheckout() {
+  const form = $('#school-checkout-form');
+  const result = $('#school-checkout-result');
+  const buttons = document.querySelectorAll('[data-school-plan]');
+
+  if (!form || !buttons.length) return;
+
+  const params = new URLSearchParams(window.location.search);
+
+  if (result && params.get('checkout') === 'success') {
+    result.textContent = 'Pagamento completato. L’attivazione automatica è in corso: controlla la mail di fatturazione.';
+    result.classList.add('show');
+  }
+
+  if (result && params.get('checkout') === 'cancelled') {
+    result.textContent = 'Checkout annullato. Nessuna attivazione è stata eseguita.';
+    result.classList.add('show');
+  }
+
+  buttons.forEach((button) => {
+    button.addEventListener('click', async () => {
+      const organization = form.elements.organization?.value.trim();
+      const billingEmail = form.elements.billingEmail?.value.trim();
+      const contactName = form.elements.contactName?.value.trim() || '';
+      const planCode = button.dataset.schoolPlan || '';
+      const schoolSize = button.dataset.schoolSize || '';
+
+      if (!organization || !billingEmail) {
+        showResult('#school-checkout-result', 'Compila almeno nome scuola ed email di fatturazione.');
+        return;
+      }
+
+      const originalLabel = button.textContent;
+      buttons.forEach((node) => {
+        node.disabled = true;
+      });
+
+      button.textContent = 'Reindirizzamento...';
+
+      try {
+        const payload = await sendJson('/api/billing/school-checkout', {
+          organization,
+          billingEmail,
+          contactName,
+          planCode,
+          schoolSize
+        });
+
+        if (!payload.url) {
+          throw new Error('URL checkout mancante.');
+        }
+
+        window.location.href = payload.url;
+      } catch (error) {
+        showResult('#school-checkout-result', error.message || 'Impossibile aprire il checkout.');
+        buttons.forEach((node) => {
+          node.disabled = false;
+        });
+        button.textContent = originalLabel;
+      }
+    });
+  });
+}
+
 wireForm('#waitlist-form', '/api/waitlist', '#waitlist-result');
 wireForm('#partner-form', '/api/partner-leads', '#partner-result');
-
-
+wireSchoolCheckout();
 hydratePlanPrefillFromUrl();
