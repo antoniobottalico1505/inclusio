@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Inclusio — app demo</title>
-  <meta name="description" content="Demo interattiva dell'app Inclusio." />
+  <title>Inclusio — area riservata</title>
+  <meta name="description" content="Area riservata Inclusio con account email/password, verifica email, reset password e funzionalità attive del prodotto." />
   <script type="module" src="/src/main.js"></script>
 </head>
 <body>
@@ -25,95 +25,183 @@
       </nav>
 
       <div class="actions">
-        <a class="btn btn-secondary" href="/piattaforma">Torna alla piattaforma</a>
-        <a class="btn btn-primary" href="/prezzi">Prezzi</a>
+        <a class="btn btn-secondary" href="/prezzi">Piani</a>
+        <button id="app-logout-button" type="button" class="btn btn-primary" style="display:none;">Esci</button>
       </div>
     </div>
   </header>
 
-  <main>
+  <main id="app-page">
     <section class="hero">
       <div class="container" style="display:grid; gap:16px;">
-        <div class="kicker">Demo app</div>
-        <h1>Qui si vedono davvero le funzionalità del prodotto.</h1>
+        <div class="kicker">Area riservata</div>
+        <h1>Account reale, funzioni reali, piano riconosciuto dal backend.</h1>
         <p class="lead">
-          Crea un profilo demo e usa il flusso reale già supportato dal backend:
-          onboarding, gruppi, buddy, RSVP, check-in e report.
+          Qui l’utente entra con email e password, verifica la mail, recupera la password se serve e usa davvero onboarding,
+          gruppi, buddy, RSVP, check-in e report. Se il pagamento Stripe è stato fatto con la stessa email, il piano viene riconosciuto automaticamente.
         </p>
-        <div id="app-status" class="success-message" aria-live="polite"></div>
+        <div id="app-status" class="success-box" aria-live="polite"></div>
       </div>
     </section>
 
-    <section class="section">
-      <div class="container" style="max-width:900px;">
-        <div class="card" style="display:grid; gap:16px;">
-          <h2>Crea profilo demo</h2>
+    <section class="section" id="auth-shell">
+      <div class="container" style="display:grid; gap:24px; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); align-items:start;">
+        <article class="card" style="display:grid; gap:16px;">
+          <div>
+            <div class="kicker">Nuovo account</div>
+            <h2>Crea account</h2>
+            <p>Registrati con email e password. Riceverai subito il link di verifica.</p>
+          </div>
 
-          <form id="demo-onboard-form" style="display:grid; gap:12px;">
+          <form id="auth-register-form" style="display:grid; gap:12px;">
             <label>
               <span>Nome</span>
               <input type="text" name="name" required />
             </label>
-
             <label>
-              <span>Città</span>
-              <input type="text" name="city" placeholder="Bari, Milano, Online..." />
+              <span>Email</span>
+              <input type="email" name="email" required />
             </label>
-
             <label>
-              <span>Comfort sociale</span>
-              <select name="comfort">
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3" selected>3</option>
-                <option value="4">4</option>
-                <option value="5">5</option>
-              </select>
+              <span>Password</span>
+              <input type="password" name="password" minlength="8" required />
             </label>
+            <button type="submit" class="btn btn-primary" data-label="Crea account">Crea account</button>
+          </form>
+        </article>
 
+        <article class="card" style="display:grid; gap:16px;">
+          <div>
+            <div class="kicker">Accesso</div>
+            <h2>Entra</h2>
+            <p>Accedi con l’email del tuo account. Se hai pagato Plus con la stessa email, il piano verrà mostrato qui.</p>
+          </div>
+
+          <form id="auth-login-form" style="display:grid; gap:12px;">
             <label>
-              <span>Energia sociale</span>
-              <select name="energy">
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3" selected>3</option>
-                <option value="4">4</option>
-                <option value="5">5</option>
-              </select>
+              <span>Email</span>
+              <input type="email" name="email" required />
             </label>
-
             <label>
-              <span>Interessi (separati da virgola)</span>
-              <input type="text" name="interests" placeholder="lettura, cinema, tecnologia, trekking" />
+              <span>Password</span>
+              <input type="password" name="password" required />
             </label>
+            <button type="submit" class="btn btn-primary" data-label="Accedi">Accedi</button>
+          </form>
 
+          <form id="auth-resend-form" style="display:grid; gap:12px; border-top:1px solid rgba(0,0,0,.08); padding-top:16px;">
+            <h3 style="margin:0;">Reinvia verifica email</h3>
             <label>
-              <span>Obiettivi (separati da virgola)</span>
-              <input type="text" name="goals" placeholder="amicizia, orientamento, integrazione" />
+              <span>Email</span>
+              <input type="email" name="email" required />
             </label>
+            <button type="submit" class="btn btn-secondary">Reinvia link</button>
+          </form>
+        </article>
+      </div>
+    </section>
 
+    <section class="section">
+      <div class="container" id="reset-password-shell" style="display:none; max-width:760px;">
+        <div class="card" style="display:grid; gap:16px;">
+          <div>
+            <div class="kicker">Reset password</div>
+            <h2>Imposta una nuova password</h2>
+          </div>
+          <form id="auth-reset-form" style="display:grid; gap:12px;">
             <label>
-              <span>Note accessibilità / contesto</span>
-              <textarea name="accessibility" rows="4" placeholder="Preferenze, limiti, note utili..."></textarea>
+              <span>Nuova password</span>
+              <input type="password" name="password" minlength="8" required />
             </label>
-
-            <button type="submit" class="btn btn-primary" data-label="Crea profilo demo">Crea profilo demo</button>
+            <button type="submit" class="btn btn-primary" data-label="Imposta nuova password">Imposta nuova password</button>
           </form>
         </div>
       </div>
     </section>
 
-    <section class="section" id="app-empty-state">
-      <div class="container">
-        <div class="card">
-          <h2>Prima crea un profilo demo</h2>
-          <p>Dopo la creazione vedrai score, buddy, gruppi suggeriti, gruppi attivi, check-in e report.</p>
+    <section class="section">
+      <div class="container" style="max-width:760px;">
+        <div class="card" style="display:grid; gap:16px;">
+          <div>
+            <div class="kicker">Password dimenticata</div>
+            <h2>Ricevi il link di reset</h2>
+          </div>
+          <form id="auth-forgot-form" style="display:grid; gap:12px;">
+            <label>
+              <span>Email</span>
+              <input type="email" name="email" required />
+            </label>
+            <button type="submit" class="btn btn-secondary" data-label="Invia link di reset">Invia link di reset</button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="app-profile-section" style="display:none;">
+      <div class="container" style="display:grid; gap:24px; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); align-items:start;">
+        <div id="auth-summary" style="display:grid; gap:16px;"></div>
+
+        <div class="card" style="display:grid; gap:16px;">
+          <div>
+            <div class="kicker">Profilo</div>
+            <h2>Completa o aggiorna il tuo profilo</h2>
+            <p>Questo sostituisce la vecchia demo: i dati salvati qui alimentano davvero suggerimenti, buddy e gruppi.</p>
+          </div>
+
+          <form id="account-profile-form" style="display:grid; gap:12px;">
+            <label>
+              <span>Nome</span>
+              <input type="text" name="name" required />
+            </label>
+            <label>
+              <span>Città</span>
+              <input type="text" name="city" placeholder="Bari, Milano, Online..." />
+            </label>
+            <label>
+              <span>Comfort sociale</span>
+              <select name="comfort">
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+              </select>
+            </label>
+            <label>
+              <span>Energia sociale</span>
+              <select name="energy">
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+              </select>
+            </label>
+            <label>
+              <span>Interessi (separati da virgola)</span>
+              <input type="text" name="interests" placeholder="lettura, cinema, tecnologia, trekking" />
+            </label>
+            <label>
+              <span>Obiettivi (separati da virgola)</span>
+              <input type="text" name="goals" placeholder="amicizia, orientamento, integrazione" />
+            </label>
+            <label>
+              <span>Note accessibilità / contesto</span>
+              <textarea name="accessibility" rows="4" placeholder="Preferenze, limiti, note utili..."></textarea>
+            </label>
+            <button type="submit" class="btn btn-primary" data-label="Salva profilo">Salva profilo</button>
+          </form>
         </div>
       </div>
     </section>
 
     <section class="section" id="app-live-shell" style="display:none;">
       <div class="container" style="display:grid; gap:24px;">
+        <div style="display:grid; gap:24px; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); align-items:start;">
+          <div id="app-plan-card"></div>
+          <div id="app-upgrade-card"></div>
+        </div>
+
         <div>
           <h2>Metriche personali</h2>
           <div id="app-stats" style="display:grid; gap:16px; grid-template-columns:repeat(auto-fit,minmax(180px,1fr));"></div>
@@ -139,6 +227,13 @@
           <div id="app-my-groups" style="display:grid; gap:16px;"></div>
         </div>
 
+        <div>
+          <h2>Insight avanzati</h2>
+          <div id="app-premium-insights" style="display:grid; gap:16px; grid-template-columns:repeat(auto-fit,minmax(220px,1fr));"></div>
+        </div>
+
+        <div id="app-org-dashboard"></div>
+
         <div style="display:grid; gap:24px; grid-template-columns:repeat(auto-fit,minmax(280px,1fr));">
           <div class="card" style="display:grid; gap:12px;">
             <h3>Invia check-in</h3>
@@ -153,7 +248,6 @@
                   <option value="5">5</option>
                 </select>
               </label>
-
               <label>
                 <span>Energia</span>
                 <select name="energy">
@@ -164,7 +258,6 @@
                   <option value="5">5</option>
                 </select>
               </label>
-
               <label>
                 <span>Ansia</span>
                 <select name="anxiety">
@@ -175,12 +268,10 @@
                   <option value="5">5</option>
                 </select>
               </label>
-
               <label>
                 <span>Nota</span>
                 <textarea name="note" rows="4" placeholder="Com’è andata?"></textarea>
               </label>
-
               <button type="submit" class="btn btn-primary">Salva check-in</button>
             </form>
           </div>
@@ -196,17 +287,14 @@
                   <option value="high">Alta</option>
                 </select>
               </label>
-
               <label>
                 <span>Categoria</span>
                 <input type="text" name="category" placeholder="esclusione, attrito, disagio..." />
               </label>
-
               <label>
                 <span>Dettagli</span>
                 <textarea name="details" rows="4" placeholder="Descrivi il problema in modo sintetico"></textarea>
               </label>
-
               <button type="submit" class="btn btn-primary">Invia report</button>
             </form>
           </div>
@@ -217,7 +305,6 @@
             <h2>Ultimi check-in</h2>
             <div id="app-checkins" style="display:grid; gap:12px;"></div>
           </div>
-
           <div>
             <h2>Ultimi report</h2>
             <div id="app-reports" style="display:grid; gap:12px;"></div>

@@ -1,11 +1,15 @@
 import './styles.css';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+const SESSION_STORAGE_KEY = 'inclusio.sessionToken';
 
 const appState = {
-  currentUserId: null,
+  sessionToken: localStorage.getItem(SESSION_STORAGE_KEY) || '',
   currentSummary: null,
-  bootstrap: null
+  bootstrap: null,
+  me: null,
+  subscription: null,
+  organizationDashboard: null
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -19,30 +23,39 @@ function esc(value = '') {
     .replace(/'/g, '&#39;');
 }
 
-async function getJson(path) {
-  if (!API_BASE) {
-    throw new Error('Configura VITE_API_BASE_URL nel frontend.');
-  }
-
-  const res = await fetch(`${API_BASE}${path}`);
-  const payload = await res.json();
-
-  if (!res.ok) {
-    throw new Error(payload.error || 'Operazione non riuscita.');
-  }
-
-  return payload;
+function getAuthHeaders() {
+  return appState.sessionToken
+    ? {
+        Authorization: `Bearer ${appState.sessionToken}`
+      }
+    : {};
 }
 
-async function sendJson(path, body) {
+function persistSessionToken(token = '') {
+  appState.sessionToken = token || '';
+
+  if (token) {
+    localStorage.setItem(SESSION_STORAGE_KEY, token);
+  } else {
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+  }
+}
+
+async function requestJson(path, options = {}) {
   if (!API_BASE) {
     throw new Error('Configura VITE_API_BASE_URL nel frontend.');
   }
 
+  const headers = {
+    ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+    ...getAuthHeaders(),
+    ...(options.headers || {})
+  };
+
   const res = await fetch(`${API_BASE}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
+    method: options.method || 'GET',
+    headers,
+    body: options.body ? JSON.stringify(options.body) : undefined
   });
 
   let payload = {};
@@ -57,11 +70,31 @@ async function sendJson(path, body) {
   return payload;
 }
 
-function showResult(selector, message) {
+function getJson(path) {
+  return requestJson(path, { method: 'GET' });
+}
+
+function sendJson(path, body, method = 'POST') {
+  return requestJson(path, { method, body });
+}
+
+function showResult(selector, message, kind = 'success') {
   const node = $(selector);
   if (!node) return;
   node.textContent = message;
+  node.classList.remove('is-error', 'is-info');
+
+  if (kind === 'error') node.classList.add('is-error');
+  if (kind === 'info') node.classList.add('is-info');
+
   node.classList.add('show');
+}
+
+function clearResult(selector) {
+  const node = $(selector);
+  if (!node) return;
+  node.textContent = '';
+  node.classList.remove('show', 'is-error', 'is-info');
 }
 
 function normalizeList(value, max = 8) {
@@ -111,15 +144,13 @@ function wireForm(selector, path, successSelector) {
       const payload = await sendJson(path, data);
 
       if (success) {
-        success.textContent = payload.message || 'Richiesta inviata correttamente.';
-        success.classList.add('show');
+        showResult(successSelector, payload.message || 'Richiesta inviata correttamente.');
       }
 
       form.reset();
     } catch (error) {
       if (success) {
-        success.textContent = error.message || 'Invio non riuscito.';
-        success.classList.add('show');
+        showResult(successSelector, error.message || 'Invio non riuscito.', 'error');
       }
     } finally {
       if (submit) {
@@ -133,30 +164,17 @@ function wireForm(selector, path, successSelector) {
 function wirePlusCheckout() {
   const form = $('#plus-checkout-form');
   const buttons = document.querySelectorAll('[data-plus-plan]');
-  const result = $('#plus-checkout-result');
 
   if (!form || !buttons.length) return;
 
-  const params = new URLSearchParams(window.location.search);
-
-  if (result && params.get('checkout') === 'success') {
-    result.textContent = 'Pagamento completato. Il piano Plus risulta in attivazione automatica.';
-    result.classList.add('show');
-  }
-
-  if (result && params.get('checkout') === 'cancelled') {
-    result.textContent = 'Checkout annullato. Nessuna attivazione eseguita.';
-    result.classList.add('show');
-  }
-
   buttons.forEach((button) => {
     button.addEventListener('click', async () => {
-      const contactName = form.elements.contactName?.value.trim() || '';
-      const billingEmail = form.elements.billingEmail?.value.trim() || '';
+      const contactName = form.elements.contactName?.value.trim() || appState.me?.user?.name || '';
+      const billingEmail = form.elements.billingEmail?.value.trim() || appState.me?.user?.email || '';
       const planCode = button.dataset.plusPlan || '';
 
       if (!billingEmail) {
-        showResult('#plus-checkout-result', 'Inserisci l’email prima del pagamento.');
+        showResult('#plus-checkout-result', 'Inserisci l’email del tuo account prima del pagamento.', 'error');
         return;
       }
 
@@ -180,7 +198,7 @@ function wirePlusCheckout() {
 
         window.location.href = payload.url;
       } catch (error) {
-        showResult('#plus-checkout-result', error.message || 'Impossibile aprire il checkout.');
+        showResult('#plus-checkout-result', error.message || 'Impossibile aprire il checkout.', 'error');
         buttons.forEach((node) => {
           node.disabled = false;
         });
@@ -196,7 +214,7 @@ function getSchoolCheckoutContext() {
   if (schoolForm) {
     return {
       contactName: schoolForm.elements.contactName?.value.trim() || '',
-      billingEmail: schoolForm.elements.billingEmail?.value.trim() || '',
+      billingEmail: schoolForm.elements.billingEmail?.value.trim() || appState.me?.user?.email || '',
       organization: schoolForm.elements.organization?.value.trim() || '',
       resultSelector: '#school-checkout-result'
     };
@@ -207,7 +225,7 @@ function getSchoolCheckoutContext() {
   if (partnerForm) {
     return {
       contactName: partnerForm.elements.name?.value.trim() || '',
-      billingEmail: partnerForm.elements.email?.value.trim() || '',
+      billingEmail: partnerForm.elements.email?.value.trim() || appState.me?.user?.email || '',
       organization: partnerForm.elements.organization?.value.trim() || '',
       resultSelector: '#partner-result'
     };
@@ -221,20 +239,6 @@ function wireSchoolCheckout() {
 
   if (!buttons.length) return;
 
-  const params = new URLSearchParams(window.location.search);
-  const resultNode = $('#school-checkout-result') || $('#partner-result');
-
-  if (resultNode && params.get('checkout') === 'success') {
-    resultNode.textContent =
-      'Pagamento completato. L’attivazione automatica della scuola è in corso.';
-    resultNode.classList.add('show');
-  }
-
-  if (resultNode && params.get('checkout') === 'cancelled') {
-    resultNode.textContent = 'Checkout annullato. Nessuna attivazione è stata eseguita.';
-    resultNode.classList.add('show');
-  }
-
   buttons.forEach((button) => {
     button.addEventListener('click', async (event) => {
       event.preventDefault();
@@ -243,12 +247,12 @@ function wireSchoolCheckout() {
       const resultSelector = context?.resultSelector || '#partner-result';
 
       if (!context) {
-        showResult(resultSelector, 'Form scuola non trovato sulla pagina.');
+        showResult(resultSelector, 'Form scuola non trovato sulla pagina.', 'error');
         return;
       }
 
       if (!context.organization || !context.billingEmail) {
-        showResult(resultSelector, 'Compila organizzazione ed email prima del pagamento.');
+        showResult(resultSelector, 'Compila organizzazione ed email prima del pagamento.', 'error');
         return;
       }
 
@@ -275,7 +279,7 @@ function wireSchoolCheckout() {
 
         window.location.href = payload.url;
       } catch (error) {
-        showResult(resultSelector, error.message || 'Impossibile aprire il checkout.');
+        showResult(resultSelector, error.message || 'Impossibile aprire il checkout.', 'error');
         buttons.forEach((node) => {
           node.disabled = false;
         });
@@ -290,7 +294,7 @@ function renderInsights(insights) {
   if (!grid || !insights) return;
 
   grid.innerHTML = [
-    metricCard('Utenti demo', insights.users),
+    metricCard('Utenti attivi', insights.users),
     metricCard('Gruppi attivi', insights.groups),
     metricCard('Buddy disponibili', insights.buddyEligible),
     metricCard('Inclusione media', insights.averageInclusion),
@@ -300,23 +304,24 @@ function renderInsights(insights) {
 }
 
 function renderDemoUsers(marketing) {
-  const node = $('#demo-users');
-  if (!node) return;
+  const grid = $('#demo-users');
+  if (!grid || !marketing) return;
 
-  const users = marketing?.demoUsers || [];
+  const users = marketing.demoUsers || [];
 
   if (!users.length) {
-    node.innerHTML = emptyCard('Nessun utente demo disponibile.');
+    grid.innerHTML = emptyCard('Nessun profilo visibile al momento.');
     return;
   }
 
-  node.innerHTML = users
+  grid.innerHTML = users
     .map(
       (user) => `
-        <div class="card" style="display:grid; gap:8px;">
+        <article class="card" style="display:grid; gap:10px;">
+          <div class="kicker">Community</div>
           <h3>${esc(user.name)}</h3>
           <p>${esc(user.city || 'Online')}</p>
-        </div>
+        </article>
       `
     )
     .join('');
@@ -327,28 +332,29 @@ function renderStats(stats) {
   if (!node || !stats) return;
 
   node.innerHTML = [
-    metricCard('Belonging score', `${stats.belongingScore}/100`),
-    metricCard('Gruppi attivi', stats.joinedGroups),
-    metricCard('Attività pianificate', stats.plannedActivities),
-    metricCard('Inclusione recente', stats.recentInclusionAverage),
-    metricCard('Ansia recente', stats.recentAnxietyAverage),
-    metricCard('Report aperti', stats.reportsOpen)
+    metricCard('Gruppi attivi', stats.joinedGroups || 0),
+    metricCard('RSVP attivi', stats.rsvps || 0),
+    metricCard('Check-in inviati', stats.checkins || 0),
+    metricCard('Inclusione media', stats.averageInclusion || 0),
+    metricCard('Ansia media', stats.averageAnxiety || 0),
+    metricCard('Report aperti', stats.openReports || 0)
   ].join('');
 }
 
-function renderActionPlan(actions) {
+function renderActionPlan(actionPlan = []) {
   const node = $('#app-action-plan');
   if (!node) return;
 
-  if (!actions?.length) {
-    node.innerHTML = emptyCard('Nessuna azione prioritaria al momento.');
+  if (!actionPlan.length) {
+    node.innerHTML = emptyCard('Completa il profilo per ottenere un piano d’azione personalizzato.');
     return;
   }
 
   node.innerHTML = `
     <div class="card">
-      <h3>Prossimi passi consigliati</h3>
-      <ul>${actions.map((item) => `<li>${esc(item)}</li>`).join('')}</ul>
+      <ul>
+        ${actionPlan.map((item) => `<li>${esc(item)}</li>`).join('')}
+      </ul>
     </div>
   `;
 }
@@ -358,19 +364,17 @@ function renderBuddy(buddy) {
   if (!node) return;
 
   if (!buddy) {
-    node.innerHTML = emptyCard('Nessun buddy consigliato per ora.');
+    node.innerHTML = emptyCard('Nessun buddy consigliato per ora. Aggiorna interessi e obiettivi.');
     return;
   }
 
   node.innerHTML = `
-    <div class="card" style="display:grid; gap:8px;">
+    <article class="card" style="display:grid; gap:12px;">
       <div class="kicker">Buddy suggerito</div>
       <h3>${esc(buddy.name)}</h3>
       <p>${esc(buddy.city || 'Online')}</p>
-      <p><strong>Interessi condivisi:</strong> ${esc((buddy.sharedInterests || []).join(', ') || 'n/d')}</p>
-      <p><strong>Profilo:</strong> ${buddy.mentor ? 'Mentor disponibile' : 'Peer match'}</p>
-      ${buddy.note ? `<p>${esc(buddy.note)}</p>` : ''}
-    </div>
+      <p>${esc(buddy.reason || 'Compatibilità elevata con il tuo profilo.')}</p>
+    </article>
   `;
 }
 
@@ -386,12 +390,12 @@ function renderRecommendations(groups) {
   node.innerHTML = groups
     .map(
       (group) => `
-        <article class="card" style="display:grid; gap:10px;">
-          <div class="kicker">Match score ${esc(group.matchScore)}</div>
+        <article class="card" style="display:grid; gap:12px;">
+          <div class="kicker">Match ${esc(group.matchScore || 0)}</div>
           <h3>${esc(group.name)}</h3>
           <p>${esc(group.description || '')}</p>
-          <p><strong>Tag:</strong> ${esc((group.tags || []).join(', ') || 'n/d')}</p>
-          <p><strong>Perché:</strong> ${esc((group.matchReasons || []).join(' · ') || 'Compatibilità generale')}</p>
+          <p><strong>Città:</strong> ${esc(group.city || 'Online')}</p>
+          <p><strong>Posti liberi:</strong> ${esc(group.spotsLeft)}</p>
           <button type="button" class="btn btn-primary" data-join-group="${esc(group.id)}">
             Entra nel gruppo
           </button>
@@ -494,17 +498,136 @@ function renderReports(reports) {
     .join('');
 }
 
+function buildPremiumInsights(summary) {
+  const checkins = summary?.checkins || [];
+  const lastThree = checkins.slice(0, 3);
+
+  if (!lastThree.length) {
+    return [
+      metricCard('Trend inclusione', 'n/d', 'Invia almeno un check-in per sbloccare il trend'),
+      metricCard('Stabilità sociale', 'n/d', 'Servono dati per misurare la stabilità')
+    ].join('');
+  }
+
+  const avgInclusion =
+    lastThree.reduce((sum, item) => sum + Number(item.included || 0), 0) / lastThree.length;
+  const avgAnxiety =
+    lastThree.reduce((sum, item) => sum + Number(item.anxiety || 0), 0) / lastThree.length;
+
+  const stability = Math.max(0, Math.round((avgInclusion * 20) - (avgAnxiety * 8)));
+
+  return [
+    metricCard('Trend inclusione', avgInclusion.toFixed(1), 'Media ultimi 3 check-in'),
+    metricCard('Stabilità sociale', `${stability}/100`, 'Indice interno avanzato per la continuità')
+  ].join('');
+}
+
+function renderSubscription(subscription) {
+  const node = $('#app-plan-card');
+  const premiumNode = $('#app-premium-insights');
+  const upgradeNode = $('#app-upgrade-card');
+  const orgNode = $('#app-org-dashboard');
+
+  if (!node) return;
+
+  const sub = subscription || {
+    active: false,
+    planCode: 'solo',
+    planLabel: 'Solo',
+    entitlements: { advancedInsights: false, orgDashboard: false }
+  };
+
+  node.innerHTML = `
+    <div class="card" style="display:grid; gap:12px;">
+      <div class="kicker">Piano attivo</div>
+      <h3>${esc(sub.planLabel || 'Solo')}</h3>
+      <p>${sub.active ? 'Abbonamento attivo e riconosciuto dal backend.' : 'Accesso gratuito attivo.'}</p>
+      <ul>
+        <li>Gruppi, buddy, check-in e report sempre disponibili</li>
+        <li>${sub.entitlements?.advancedInsights ? 'Insight avanzati sbloccati' : 'Insight avanzati disponibili con Plus'}</li>
+        <li>${sub.entitlements?.orgDashboard ? 'Dashboard organizzativa sbloccata' : 'Dashboard organizzativa non inclusa'}</li>
+      </ul>
+      ${sub.active ? '<a class="btn btn-secondary" href="/prezzi">Gestisci o cambia piano</a>' : '<a class="btn btn-primary" href="/prezzi">Attiva Plus</a>'}
+    </div>
+  `;
+
+  if (premiumNode) {
+    premiumNode.innerHTML = sub.entitlements?.advancedInsights
+      ? buildPremiumInsights(appState.currentSummary)
+      : emptyCard('Con Plus sblocchi insight avanzati e una lettura più utile dei tuoi check-in.');
+  }
+
+  if (upgradeNode) {
+    upgradeNode.innerHTML = sub.entitlements?.advancedInsights
+      ? ''
+      : `
+        <div class="card">
+          <div class="kicker">Upgrade</div>
+          <h3>Passa a Plus</h3>
+          <p>Usa la stessa email del tuo account per far riconoscere automaticamente il piano dopo Stripe.</p>
+          <a class="btn btn-primary" href="/prezzi">Vai ai piani</a>
+        </div>
+      `;
+  }
+
+  if (orgNode) {
+    const dashboard = appState.organizationDashboard;
+
+    orgNode.innerHTML = sub.entitlements?.orgDashboard && dashboard
+      ? `
+        <div class="card" style="display:grid; gap:16px;">
+          <div class="kicker">Dashboard organizzativa</div>
+          <h3>Vista responsabile</h3>
+          <div style="display:grid; gap:16px; grid-template-columns:repeat(auto-fit,minmax(180px,1fr));">
+            ${metricCard('Utenti', dashboard.insights?.users || 0)}
+            ${metricCard('Gruppi', dashboard.insights?.groups || 0)}
+            ${metricCard('Report aperti', dashboard.insights?.openReports || 0)}
+            ${metricCard('Waitlist', dashboard.insights?.waitlistCount || 0)}
+          </div>
+          <p>${(dashboard.organizations || []).length ? `Organizzazioni collegate: ${(dashboard.organizations || []).map((item) => esc(item.name)).join(', ')}` : 'Nessuna organizzazione associata a questa email.'}</p>
+        </div>
+      `
+      : '';
+  }
+}
+
+function applyAccountView(payload) {
+  appState.me = payload;
+  appState.currentSummary = payload.summary || null;
+  appState.subscription = payload.subscription || null;
+  appState.organizationDashboard = payload.organizationDashboard || null;
+
+  const authShell = $('#auth-shell');
+  const appShell = $('#app-live-shell');
+  const profileSection = $('#app-profile-section');
+  const authSummary = $('#auth-summary');
+  const logoutButton = $('#app-logout-button');
+
+  if (authShell) authShell.style.display = 'none';
+  if (appShell) appShell.style.display = 'grid';
+  if (profileSection) profileSection.style.display = 'grid';
+  if (logoutButton) logoutButton.style.display = 'inline-flex';
+
+  if (authSummary) {
+    authSummary.innerHTML = `
+      <div class="card">
+        <div class="kicker">Account</div>
+        <h3>${esc(payload.user?.name || 'Profilo')}</h3>
+        <p>${esc(payload.user?.email || '')}</p>
+        <p>${payload.user?.emailVerified ? 'Email verificata' : 'Email non verificata'}</p>
+      </div>
+    `;
+  }
+
+  fillProfileForm(payload.user || {});
+  renderSummary(payload.summary);
+  renderSubscription(payload.subscription);
+}
+
 function renderSummary(summary) {
   if (!summary) return;
 
   appState.currentSummary = summary;
-  appState.currentUserId = summary.user?.id || appState.currentUserId;
-
-  const emptyState = $('#app-empty-state');
-  const liveShell = $('#app-live-shell');
-
-  if (emptyState) emptyState.style.display = 'none';
-  if (liveShell) liveShell.style.display = 'grid';
 
   renderStats(summary.stats);
   renderActionPlan(summary.actionPlan);
@@ -514,7 +637,34 @@ function renderSummary(summary) {
   renderCheckins(summary.checkins);
   renderReports(summary.reports);
 
-  showResult('#app-status', `Profilo demo attivo: ${summary.user?.name || 'utente'}`);
+  showResult('#app-status', `Accesso attivo: ${summary.user?.name || 'utente'}`);
+}
+
+function fillProfileForm(user) {
+  const form = $('#account-profile-form');
+  if (!form || !user) return;
+
+  form.elements.name.value = user.name || '';
+  form.elements.city.value = user.city || '';
+  form.elements.comfort.value = user.comfort || 3;
+  form.elements.energy.value = user.energy || 3;
+  form.elements.interests.value = Array.isArray(user.interests) ? user.interests.join(', ') : '';
+  form.elements.goals.value = Array.isArray(user.goals) ? user.goals.join(', ') : '';
+  form.elements.accessibility.value = user.accessibility || '';
+}
+
+async function refreshAuthenticatedUser() {
+  if (!appState.sessionToken) return null;
+
+  try {
+    const payload = await getJson('/api/auth/me');
+    applyAccountView(payload);
+    return payload;
+  } catch (error) {
+    persistSessionToken('');
+    showResult('#app-status', error.message || 'Sessione non valida. Effettua di nuovo l’accesso.', 'error');
+    return null;
+  }
 }
 
 async function loadBootstrap() {
@@ -526,23 +676,146 @@ async function loadBootstrap() {
     renderInsights(payload.insights);
     renderDemoUsers(payload.marketing);
   } catch (error) {
-    showResult('#platform-status', error.message || 'Impossibile caricare il backend.');
-    showResult('#app-status', error.message || 'Impossibile caricare il backend.');
+    showResult('#platform-status', error.message || 'Impossibile caricare il backend.', 'error');
+    showResult('#app-status', error.message || 'Impossibile caricare il backend.', 'error');
   }
 }
 
-function wireDemoOnboarding() {
-  const form = $('#demo-onboard-form');
+function wireRegisterForm() {
+  const form = $('#auth-register-form');
+  if (!form) return;
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const submit = form.querySelector('button[type="submit"]');
+    clearResult('#app-status');
+
+    if (submit) {
+      submit.disabled = true;
+      submit.textContent = 'Creazione account...';
+    }
+
+    try {
+      const payload = await sendJson('/api/auth/register', {
+        name: form.elements.name.value.trim(),
+        email: form.elements.email.value.trim(),
+        password: form.elements.password.value
+      });
+
+      showResult('#app-status', payload.message || 'Account creato. Controlla la tua email per verificare l’indirizzo.');
+      form.reset();
+    } catch (error) {
+      showResult('#app-status', error.message || 'Registrazione non riuscita.', 'error');
+    } finally {
+      if (submit) {
+        submit.disabled = false;
+        submit.textContent = submit.dataset.label || 'Crea account';
+      }
+    }
+  });
+}
+
+function wireLoginForm() {
+  const form = $('#auth-login-form');
+  if (!form) return;
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const submit = form.querySelector('button[type="submit"]');
+    clearResult('#app-status');
+
+    if (submit) {
+      submit.disabled = true;
+      submit.textContent = 'Accesso...';
+    }
+
+    try {
+      const payload = await sendJson('/api/auth/login', {
+        email: form.elements.email.value.trim(),
+        password: form.elements.password.value
+      });
+
+      persistSessionToken(payload.token || '');
+      applyAccountView(payload);
+      showResult('#app-status', 'Accesso completato.');
+      form.reset();
+    } catch (error) {
+      showResult('#app-status', error.message || 'Accesso non riuscito.', 'error');
+    } finally {
+      if (submit) {
+        submit.disabled = false;
+        submit.textContent = submit.dataset.label || 'Accedi';
+      }
+    }
+  });
+}
+
+function wireForgotPasswordForm() {
+  const form = $('#auth-forgot-form');
+  if (!form) return;
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const submit = form.querySelector('button[type="submit"]');
+
+    if (submit) {
+      submit.disabled = true;
+      submit.textContent = 'Invio...';
+    }
+
+    try {
+      const payload = await sendJson('/api/auth/forgot-password', {
+        email: form.elements.email.value.trim()
+      });
+      showResult('#app-status', payload.message || 'Se l’account esiste, abbiamo inviato le istruzioni via email.');
+      form.reset();
+    } catch (error) {
+      showResult('#app-status', error.message || 'Richiesta non riuscita.', 'error');
+    } finally {
+      if (submit) {
+        submit.disabled = false;
+        submit.textContent = submit.dataset.label || 'Invia link di reset';
+      }
+    }
+  });
+}
+
+function wireResendVerificationForm() {
+  const form = $('#auth-resend-form');
   if (!form) return;
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
 
+    try {
+      const payload = await sendJson('/api/auth/resend-verification', {
+        email: form.elements.email.value.trim()
+      });
+      showResult('#app-status', payload.message || 'Se necessario, abbiamo reinviato la mail di verifica.');
+      form.reset();
+    } catch (error) {
+      showResult('#app-status', error.message || 'Richiesta non riuscita.', 'error');
+    }
+  });
+}
+
+function wireProfileForm() {
+  const form = $('#account-profile-form');
+  if (!form) return;
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+
+    if (!appState.sessionToken) {
+      showResult('#app-status', 'Accedi per salvare il profilo.', 'error');
+      return;
+    }
+
     const submit = form.querySelector('button[type="submit"]');
 
     if (submit) {
       submit.disabled = true;
-      submit.textContent = 'Creazione profilo...';
+      submit.textContent = 'Salvataggio...';
     }
 
     try {
@@ -556,14 +829,14 @@ function wireDemoOnboarding() {
         goals: normalizeList(form.elements.goals.value, 4)
       });
 
-      renderSummary(payload.summary);
-      form.reset();
+      await refreshAuthenticatedUser();
+      showResult('#app-status', payload.message || 'Profilo aggiornato.');
     } catch (error) {
-      showResult('#app-status', error.message || 'Impossibile creare il profilo demo.');
+      showResult('#app-status', error.message || 'Aggiornamento profilo non riuscito.', 'error');
     } finally {
       if (submit) {
         submit.disabled = false;
-        submit.textContent = submit.dataset.label || 'Crea profilo demo';
+        submit.textContent = submit.dataset.label || 'Salva profilo';
       }
     }
   });
@@ -576,14 +849,13 @@ function wireCheckinForm() {
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
 
-    if (!appState.currentUserId) {
-      showResult('#app-status', 'Crea prima un profilo demo.');
+    if (!appState.sessionToken) {
+      showResult('#app-status', 'Accedi per inviare un check-in.', 'error');
       return;
     }
 
     try {
       const payload = await sendJson('/api/checkins', {
-        userId: appState.currentUserId,
         included: Number(form.elements.included.value),
         energy: Number(form.elements.energy.value),
         anxiety: Number(form.elements.anxiety.value),
@@ -591,9 +863,10 @@ function wireCheckinForm() {
       });
 
       renderSummary(payload.summary);
+      renderSubscription(appState.subscription);
       form.reset();
     } catch (error) {
-      showResult('#app-status', error.message || 'Check-in non riuscito.');
+      showResult('#app-status', error.message || 'Check-in non riuscito.', 'error');
     }
   });
 }
@@ -605,14 +878,13 @@ function wireReportForm() {
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
 
-    if (!appState.currentUserId) {
-      showResult('#app-status', 'Crea prima un profilo demo.');
+    if (!appState.sessionToken) {
+      showResult('#app-status', 'Accedi per inviare un report.', 'error');
       return;
     }
 
     try {
       const payload = await sendJson('/api/reports', {
-        userId: appState.currentUserId,
         severity: form.elements.severity.value,
         category: form.elements.category.value.trim(),
         details: form.elements.details.value.trim()
@@ -621,7 +893,7 @@ function wireReportForm() {
       renderSummary(payload.summary);
       form.reset();
     } catch (error) {
-      showResult('#app-status', error.message || 'Report non riuscito.');
+      showResult('#app-status', error.message || 'Report non riuscito.', 'error');
     }
   });
 }
@@ -631,45 +903,133 @@ function wireAppActions() {
     const joinButton = event.target.closest('[data-join-group]');
     const leaveButton = event.target.closest('[data-leave-group]');
     const rsvpButton = event.target.closest('[data-rsvp-group][data-rsvp-activity]');
+    const logoutButton = event.target.closest('#app-logout-button');
 
-    if (!appState.currentUserId) return;
+    if (logoutButton) {
+      try {
+        await sendJson('/api/auth/logout', {});
+      } catch {}
+      persistSessionToken('');
+      appState.me = null;
+      window.location.href = '/app';
+      return;
+    }
+
+    if (!appState.sessionToken) return;
 
     try {
       if (joinButton) {
-        const payload = await sendJson(`/api/groups/${joinButton.dataset.joinGroup}/join`, {
-          userId: appState.currentUserId
-        });
+        const payload = await sendJson(`/api/groups/${joinButton.dataset.joinGroup}/join`, {});
         renderSummary(payload.summary);
+        renderSubscription(appState.subscription);
         return;
       }
 
       if (leaveButton) {
-        const payload = await sendJson(`/api/groups/${leaveButton.dataset.leaveGroup}/leave`, {
-          userId: appState.currentUserId
-        });
+        const payload = await sendJson(`/api/groups/${leaveButton.dataset.leaveGroup}/leave`, {});
         renderSummary(payload.summary);
+        renderSubscription(appState.subscription);
         return;
       }
 
       if (rsvpButton) {
         const payload = await sendJson(
           `/api/groups/${rsvpButton.dataset.rsvpGroup}/activities/${rsvpButton.dataset.rsvpActivity}/rsvp`,
-          { userId: appState.currentUserId }
+          {}
         );
         renderSummary(payload.summary);
+        renderSubscription(appState.subscription);
       }
     } catch (error) {
-      showResult('#app-status', error.message || 'Operazione non riuscita.');
+      showResult('#app-status', error.message || 'Operazione non riuscita.', 'error');
     }
   });
+}
+
+async function handleQueryActions() {
+  const params = new URLSearchParams(window.location.search);
+  const verifyToken = params.get('verify');
+  const resetToken = params.get('reset');
+  const billing = params.get('billing');
+  const plan = params.get('plan');
+
+  if (billing === 'success') {
+    showResult(
+      '#app-status',
+      plan
+        ? `Pagamento completato per ${plan}. Accedi o registrati con la stessa email usata su Stripe per vedere il piano attivo.`
+        : 'Pagamento completato. Accedi con la stessa email usata su Stripe per vedere il piano attivo.'
+    );
+  }
+
+  if (verifyToken) {
+    try {
+      const payload = await sendJson('/api/auth/verify-email', { token: verifyToken });
+      showResult('#app-status', payload.message || 'Email verificata. Ora puoi accedere.');
+      params.delete('verify');
+      window.history.replaceState({}, '', `${window.location.pathname}${params.toString() ? `?${params}` : ''}`);
+    } catch (error) {
+      showResult('#app-status', error.message || 'Verifica email non riuscita.', 'error');
+    }
+  }
+
+  if (resetToken) {
+    const wrapper = $('#reset-password-shell');
+    const form = $('#auth-reset-form');
+
+    if (wrapper && form) {
+      wrapper.style.display = 'grid';
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const submit = form.querySelector('button[type="submit"]');
+
+        if (submit) {
+          submit.disabled = true;
+          submit.textContent = 'Aggiornamento...';
+        }
+
+        try {
+          const payload = await sendJson('/api/auth/reset-password', {
+            token: resetToken,
+            password: form.elements.password.value
+          });
+          showResult('#app-status', payload.message || 'Password aggiornata. Ora puoi accedere.');
+          form.reset();
+          wrapper.style.display = 'none';
+          params.delete('reset');
+          window.history.replaceState({}, '', `${window.location.pathname}${params.toString() ? `?${params}` : ''}`);
+        } catch (error) {
+          showResult('#app-status', error.message || 'Reset password non riuscito.', 'error');
+        } finally {
+          if (submit) {
+            submit.disabled = false;
+            submit.textContent = submit.dataset.label || 'Imposta nuova password';
+          }
+        }
+      }, { once: true });
+    }
+  }
+}
+
+async function initAppPage() {
+  if (!$('#app-page')) return;
+
+  wireRegisterForm();
+  wireLoginForm();
+  wireForgotPasswordForm();
+  wireResendVerificationForm();
+  wireProfileForm();
+  wireCheckinForm();
+  wireReportForm();
+
+  await handleQueryActions();
+  await refreshAuthenticatedUser();
 }
 
 wireForm('#waitlist-form', '/api/waitlist', '#waitlist-result');
 wireForm('#partner-form', '/api/partner-leads', '#partner-result');
 wirePlusCheckout();
 wireSchoolCheckout();
-wireDemoOnboarding();
-wireCheckinForm();
-wireReportForm();
 wireAppActions();
 loadBootstrap();
+initAppPage();

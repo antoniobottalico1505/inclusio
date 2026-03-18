@@ -438,6 +438,7 @@ select:focus {
 }
 
 .success-box,
+.success-message,
 .info-box {
   padding: 18px 20px;
   border-radius: 16px;
@@ -445,7 +446,8 @@ select:focus {
   display: none;
 }
 
-.success-box.show {
+.success-box.show,
+.success-message.show {
   display: block;
   background: rgba(132, 106, 73, .10);
   color: #5b4332;
@@ -530,4 +532,20 @@ select:focus {
   .nav { display: none; }
 
   .actions .btn-secondary { display: none; }
+}
+
+.success-box.is-error,
+.success-message.is-error {
+  display: block;
+  background: rgba(184, 90, 82, .12);
+  color: #7d342e;
+  border: 1px solid rgba(184, 90, 82, .28);
+}
+
+.success-box.is-info,
+.success-message.is-info {
+  display: block;
+  background: rgba(205, 162, 125, .16);
+  color: #6f513f;
+  border: 1px solid rgba(181, 134, 96, .26);
 }

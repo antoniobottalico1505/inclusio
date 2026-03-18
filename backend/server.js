@@ -1,120 +1,23 @@
 const nodemailer = require('nodemailer');
-const Stripe = require('stripe');
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const { ensureStateRow, readDb, writeDb } = require('./db');
 
 const app = express();
-
 const PORT = Number(process.env.PORT || 3000);
 const HOST = '0.0.0.0';
 
-const DB_PATH = path.join(__dirname, 'data', 'db.json');
 const SEED_PATH = path.join(__dirname, 'data', 'seed.json');
 
 const OWNER_EMAIL = process.env.OWNER_EMAIL || '';
 const GMAIL_USER = process.env.GMAIL_USER || '';
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || '';
 const APP_BASE_URL = process.env.APP_BASE_URL || '';
-
 const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
 const SMTP_PORT = Number(process.env.SMTP_PORT || 465);
 const SMTP_SECURE = String(process.env.SMTP_SECURE || 'true') === 'true';
-
-const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
-const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
-const STRIPE_PRICE_PLUS_MONTHLY = process.env.STRIPE_PRICE_PLUS_MONTHLY || '';
-const STRIPE_PRICE_PLUS_ANNUAL = process.env.STRIPE_PRICE_PLUS_ANNUAL || '';
-const STRIPE_PRICE_SCHOOL_STARTER_YEARLY = process.env.STRIPE_PRICE_SCHOOL_STARTER_YEARLY || '';
-const STRIPE_PRICE_SCHOOL_PRO_YEARLY = process.env.STRIPE_PRICE_SCHOOL_PRO_YEARLY || '';
-
-const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
-
-app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
-  if (!stripe || !STRIPE_WEBHOOK_SECRET) {
-    return res.status(500).json({ error: 'Stripe webhook non configurato.' });
-  }
-
-  const signature = req.headers['stripe-signature'];
-  let event;
-
-  try {
-    event = stripe.webhooks.constructEvent(req.body, signature, STRIPE_WEBHOOK_SECRET);
-  } catch (error) {
-    return res.status(400).send(`Webhook Error: ${error.message}`);
-  }
-
-  try {
-    if (event.type === 'checkout.session.completed') {
-      const session = event.data.object;
-      const planCode = normalizePlanCode(session.metadata?.planCode);
-      const customerEmail = email(session.customer_email || session.metadata?.billingEmail);
-      const organization = text(session.metadata?.organization, 120);
-      const schoolSize = text(session.metadata?.schoolSize, 60);
-      const contactName = text(session.metadata?.contactName, 80);
-
-      if (['plus_monthly', 'plus_annual', 'school_starter', 'school_pro'].includes(planCode) && isValidEmail(customerEmail)) {
-        const db = readDb();
-
-        const activated = activateSubscriptionRecord(db, {
-          email: customerEmail,
-          planCode,
-          source: 'stripe_checkout',
-          contactName,
-          organization,
-          schoolSize,
-          stripeCustomerId: text(session.customer, 80),
-          stripeSubscriptionId: text(session.subscription, 80),
-          checkoutSessionId: text(session.id, 80)
-        });
-
-        writeDb(db);
-
-        await Promise.all([
-          safeSendEmail({
-            to: OWNER_EMAIL,
-            subject: `[Inclusio] Piano attivato — ${activated.planLabel}`,
-            html: `
-              <h2>Pagamento completato</h2>
-              <p><strong>Email:</strong> ${esc(customerEmail)}</p>
-              <p><strong>Piano:</strong> ${esc(activated.planLabel)}</p>
-              <p><strong>Referente:</strong> ${esc(contactName || 'n/d')}</p>
-              <p><strong>Organizzazione:</strong> ${esc(organization || 'n/d')}</p>
-              <p><strong>Dimensione:</strong> ${esc(schoolSize || 'n/d')}</p>
-            `
-          }),
-          safeSendEmail({
-            to: customerEmail,
-            subject: 'Inclusio — abbonamento attivato',
-            html: `
-              <h2>Attivazione completata</h2>
-              <p>Ciao${contactName ? ` ${esc(contactName)}` : ''},</p>
-              <p>il tuo piano <strong>${esc(activated.planLabel)}</strong> è attivo.</p>
-              <p><a href="${APP_BASE_URL || '#'}">Vai a Inclusio</a></p>
-            `
-          })
-        ]);
-      }
-    }
-
-    if (event.type === 'customer.subscription.deleted') {
-      const subscription = event.data.object;
-      const db = readDb();
-
-      deactivateSubscriptionRecord(db, {
-        stripeSubscriptionId: text(subscription.id, 80),
-        status: 'canceled'
-      });
-
-      writeDb(db);
-    }
-
-    return res.json({ received: true });
-  } catch (error) {
-    console.error('Stripe webhook failed:', error);
-    return res.status(500).json({ error: 'Elaborazione webhook non riuscita.' });
-  }
-});
+const BILLING_ADMIN_TOKEN = process.env.BILLING_ADMIN_TOKEN || '';
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
@@ -145,12 +48,6 @@ app.use((req, res, next) => {
   return next();
 });
 
-function ensureDb() {
-  if (!fs.existsSync(DB_PATH)) {
-    fs.copyFileSync(SEED_PATH, DB_PATH);
-  }
-}
-
 function baseDbShape() {
   return {
     interests: [],
@@ -161,7 +58,6 @@ function baseDbShape() {
     waitlist: [],
     partnerLeads: [],
     subscriptions: [],
-    organizations: [],
     marketing: {
       plans: [],
       faqs: []
@@ -171,7 +67,6 @@ function baseDbShape() {
 
 function normalizeDb(raw) {
   const base = baseDbShape();
-
   const db = {
     ...base,
     ...(raw || {}),
@@ -189,17 +84,18 @@ function normalizeDb(raw) {
   db.waitlist = Array.isArray(db.waitlist) ? db.waitlist : [];
   db.partnerLeads = Array.isArray(db.partnerLeads) ? db.partnerLeads : [];
   db.subscriptions = Array.isArray(db.subscriptions) ? db.subscriptions : [];
-  db.organizations = Array.isArray(db.organizations) ? db.organizations : [];
   db.marketing.plans = Array.isArray(db.marketing.plans) ? db.marketing.plans : [];
   db.marketing.faqs = Array.isArray(db.marketing.faqs) ? db.marketing.faqs : [];
 
   db.groups = db.groups.map((group) => ({
     ...group,
+    premiumOnly: Boolean(group.premiumOnly),
     tags: Array.isArray(group.tags) ? group.tags : [],
     members: Array.isArray(group.members) ? group.members : [],
     activities: Array.isArray(group.activities)
       ? group.activities.map((activity) => ({
           ...activity,
+          premiumOnly: Boolean(activity.premiumOnly),
           rsvps: Array.isArray(activity.rsvps) ? activity.rsvps : []
         }))
       : []
@@ -207,22 +103,22 @@ function normalizeDb(raw) {
 
   db.users = db.users.map((user) => ({
     ...user,
+    email: email(user.email),
+    planCode: normalizePlanCode(user.planCode || user.plan),
     interests: Array.isArray(user.interests) ? user.interests : [],
     goals: Array.isArray(user.goals) ? user.goals : [],
     joinedGroupIds: Array.isArray(user.joinedGroupIds) ? user.joinedGroupIds : []
   }));
 
+  db.subscriptions = db.subscriptions.map((subscription) => ({
+    ...subscription,
+    email: email(subscription.email),
+    planCode: normalizePlanCode(subscription.planCode || subscription.plan),
+    status: text(subscription.status || 'active', 20) || 'active',
+    source: text(subscription.source || 'manual', 30) || 'manual'
+  }));
+
   return db;
-}
-
-function readDb() {
-  ensureDb();
-  const raw = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
-  return normalizeDb(raw);
-}
-
-function writeDb(db) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(normalizeDb(db), null, 2), 'utf8');
 }
 
 function slugify(value = '') {
@@ -269,17 +165,15 @@ function esc(value) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+    .replace(/'/g, '&#039;');
 }
+
 
 function normalizePlanCode(value) {
   const code = String(value || '').trim().toLowerCase();
 
   if (['plus', 'plus_monthly', 'monthly', 'mensile'].includes(code)) return 'plus_monthly';
   if (['plus_annual', 'annual', 'annuale'].includes(code)) return 'plus_annual';
-  if (['school_starter', 'starter', 'scuola_starter'].includes(code)) return 'school_starter';
-  if (['school_pro', 'pro', 'scuola_pro'].includes(code)) return 'school_pro';
-  if (['custom', 'enterprise', 'campus', 'school_enterprise'].includes(code)) return 'custom';
 
   return 'solo';
 }
@@ -288,226 +182,60 @@ function getPlanLabel(planCode = 'solo') {
   const normalized = normalizePlanCode(planCode);
 
   if (normalized === 'plus_annual') return 'Plus Annuale';
-  if (normalized === 'plus_monthly') return 'Plus';
-  if (normalized === 'school_starter') return 'School Starter';
-  if (normalized === 'school_pro') return 'School Pro';
-  if (normalized === 'custom') return 'Campus / Enterprise';
+  if (normalized === 'plus_monthly') return 'Plus Mensile';
 
   return 'Solo';
 }
 
 function getPlanEntitlements(planCode = 'solo') {
   const normalized = normalizePlanCode(planCode);
-
-  const baseAccess = {
-    appAccess: true,
-    onboarding: true,
-    groups: true,
-    activities: true,
-    buddy: true,
-    checkins: true,
-    reports: true
-  };
-
-  if (normalized === 'school_starter') {
-    return {
-      ...baseAccess,
-      planCode: normalized,
-      planLabel: getPlanLabel(normalized),
-      isPaid: true,
-      isB2B: true,
-      advancedInsights: true,
-      premiumGroups: true,
-      premiumActivities: true,
-      orgDashboard: true,
-      exports: false,
-      multiCampus: false
-    };
-  }
-
-  if (normalized === 'school_pro') {
-    return {
-      ...baseAccess,
-      planCode: normalized,
-      planLabel: getPlanLabel(normalized),
-      isPaid: true,
-      isB2B: true,
-      advancedInsights: true,
-      premiumGroups: true,
-      premiumActivities: true,
-      orgDashboard: true,
-      exports: true,
-      multiCampus: true
-    };
-  }
-
-  if (normalized === 'custom') {
-    return {
-      ...baseAccess,
-      planCode: normalized,
-      planLabel: getPlanLabel(normalized),
-      isPaid: true,
-      isB2B: true,
-      advancedInsights: true,
-      premiumGroups: true,
-      premiumActivities: true,
-      orgDashboard: true,
-      exports: true,
-      multiCampus: true
-    };
-  }
-
-  if (normalized === 'plus_monthly' || normalized === 'plus_annual') {
-    return {
-      ...baseAccess,
-      planCode: normalized,
-      planLabel: getPlanLabel(normalized),
-      isPaid: true,
-      isB2B: false,
-      advancedInsights: true,
-      premiumGroups: true,
-      premiumActivities: true,
-      orgDashboard: false,
-      exports: false,
-      multiCampus: false
-    };
-  }
+  const isPaid = normalized === 'plus_monthly' || normalized === 'plus_annual';
 
   return {
-    ...baseAccess,
-    planCode: 'solo',
-    planLabel: 'Solo',
-    isPaid: false,
-    isB2B: false,
-    advancedInsights: false,
-    premiumGroups: false,
-    premiumActivities: false,
-    orgDashboard: false,
-    exports: false,
-    multiCampus: false
+    planCode: normalized,
+    planLabel: getPlanLabel(normalized),
+    isPaid,
+    maxGroups: isPaid ? 3 : 1,
+    buddyMatches: isPaid ? 3 : 1,
+    premiumGroups: isPaid,
+    premiumActivities: isPaid,
+    advancedInsights: isPaid,
+    priorityIntroductions: isPaid,
+    supportLevel: isPaid ? 'priority' : 'base'
   };
 }
 
-function getPriceIdForPlan(planCode) {
-  const normalized = normalizePlanCode(planCode);
+function getActiveSubscriptionByEmail(db, emailValue) {
+  const normalizedEmail = email(emailValue);
+  if (!normalizedEmail || !Array.isArray(db.subscriptions)) return null;
 
-  if (normalized === 'plus_monthly') return STRIPE_PRICE_PLUS_MONTHLY;
-  if (normalized === 'plus_annual') return STRIPE_PRICE_PLUS_ANNUAL;
-  if (normalized === 'school_starter') return STRIPE_PRICE_SCHOOL_STARTER_YEARLY;
-  if (normalized === 'school_pro') return STRIPE_PRICE_SCHOOL_PRO_YEARLY;
-
-  return '';
+  return (
+    db.subscriptions.find((subscription) => {
+      if (email(subscription.email) !== normalizedEmail) return false;
+      if (String(subscription.status || '').toLowerCase() !== 'active') return false;
+      return normalizePlanCode(subscription.planCode || subscription.plan) !== 'solo';
+    }) || null
+  );
 }
 
-function activateSubscriptionRecord(db, payload) {
-  const emailValue = email(payload.email);
-  const planCode = normalizePlanCode(payload.planCode);
-  const now = new Date().toISOString();
+function getPlanCodeForEmail(db, emailValue) {
+  const activeSubscription = getActiveSubscriptionByEmail(db, emailValue);
+  return activeSubscription ? normalizePlanCode(activeSubscription.planCode || activeSubscription.plan) : 'solo';
+}
 
-  if (!isValidEmail(emailValue)) {
-    throw new Error('Email di fatturazione non valida.');
+function getUserPlanCode(db, user) {
+  if (!user) return 'solo';
+
+  if (user.email) {
+    const subscriptionPlan = getPlanCodeForEmail(db, user.email);
+    if (subscriptionPlan !== 'solo') return subscriptionPlan;
   }
 
-  db.subscriptions.forEach((item) => {
-    if (
-      email(item.email) === emailValue &&
-      String(item.status || '').toLowerCase() === 'active'
-    ) {
-      item.status = 'replaced';
-      item.replacedAt = now;
-    }
-  });
-
-  const record = {
-    id: makeId('sub'),
-    email: emailValue,
-    contactName: text(payload.contactName, 80),
-    organization: text(payload.organization, 120),
-    schoolSize: text(payload.schoolSize, 60),
-    planCode,
-    planLabel: getPlanLabel(planCode),
-    status: 'active',
-    source: text(payload.source, 40) || 'manual',
-    stripeCustomerId: text(payload.stripeCustomerId, 80),
-    stripeSubscriptionId: text(payload.stripeSubscriptionId, 80),
-    checkoutSessionId: text(payload.checkoutSessionId, 80),
-    createdAt: now,
-    activatedAt: now
-  };
-
-  db.subscriptions.unshift(record);
-
-  if (['school_starter', 'school_pro', 'custom'].includes(planCode)) {
-    const orgKey = slugify(payload.organization || emailValue);
-    const current = db.organizations.find(
-      (item) => slugify(item.name || item.billingEmail) === orgKey
-    );
-
-    if (current) {
-      current.name = text(payload.organization, 120) || current.name;
-      current.billingEmail = emailValue;
-      current.planCode = planCode;
-      current.planLabel = getPlanLabel(planCode);
-      current.schoolSize = text(payload.schoolSize, 60);
-      current.status = 'active';
-      current.activatedAt = now;
-      current.stripeCustomerId = text(payload.stripeCustomerId, 80);
-      current.stripeSubscriptionId = text(payload.stripeSubscriptionId, 80);
-    } else {
-      db.organizations.unshift({
-        id: makeId('org'),
-        name: text(payload.organization, 120),
-        billingEmail: emailValue,
-        planCode,
-        planLabel: getPlanLabel(planCode),
-        schoolSize: text(payload.schoolSize, 60),
-        status: 'active',
-        createdAt: now,
-        activatedAt: now,
-        stripeCustomerId: text(payload.stripeCustomerId, 80),
-        stripeSubscriptionId: text(payload.stripeSubscriptionId, 80)
-      });
-    }
-  }
-
-  return record;
+  return normalizePlanCode(user.planCode || user.plan);
 }
 
-function deactivateSubscriptionRecord(db, payload) {
-  const subscriptionId = text(payload.stripeSubscriptionId, 80);
-  const nextStatus = text(payload.status, 20) || 'canceled';
-  const now = new Date().toISOString();
-
-  db.subscriptions.forEach((item) => {
-    if (subscriptionId && text(item.stripeSubscriptionId, 80) === subscriptionId) {
-      item.status = nextStatus;
-      item.deactivatedAt = now;
-    }
-  });
-
-  db.organizations.forEach((item) => {
-    if (subscriptionId && text(item.stripeSubscriptionId, 80) === subscriptionId) {
-      item.status = nextStatus;
-      item.deactivatedAt = now;
-    }
-  });
-}
-
-function getActiveSubscription(db, criteria = {}) {
-  const wantedEmail = email(criteria.email);
-  const wantedOrg = slugify(criteria.organization || '');
-
-  return [...db.subscriptions]
-    .filter((item) => String(item.status || '').toLowerCase() === 'active')
-    .filter((item) => {
-      const emailMatch = wantedEmail ? email(item.email) === wantedEmail : true;
-      const orgMatch = wantedOrg ? slugify(item.organization || '') === wantedOrg : true;
-      return emailMatch && orgMatch;
-    })
-    .sort(
-      (a, b) =>
-        new Date(b.activatedAt || b.createdAt || 0) - new Date(a.activatedAt || a.createdAt || 0)
-    )[0] || null;
+function getUserEntitlements(db, user) {
+  return getPlanEntitlements(getUserPlanCode(db, user));
 }
 
 function getUserById(db, userId) {
@@ -540,12 +268,25 @@ function getGroupMemberProfiles(db, group) {
 }
 
 function serializeGroup(db, group, currentUserId = null) {
+  const currentUser = currentUserId ? getUserById(db, currentUserId) : null;
+  const entitlements = currentUser ? getUserEntitlements(db, currentUser) : getPlanEntitlements('solo');
+
   return {
     ...group,
+    premiumOnly: Boolean(group.premiumOnly),
+    lockedByPlan: Boolean(group.premiumOnly) && !entitlements.premiumGroups,
+    lockedReason: Boolean(group.premiumOnly) && !entitlements.premiumGroups ? 'Disponibile con Plus.' : null,
     memberCount: (group.members || []).length,
     spotsLeft: Math.max(Number(group.sizeLimit || 0) - (group.members || []).length, 0),
     isJoined: currentUserId ? (group.members || []).includes(currentUserId) : false,
-    membersPreview: getGroupMemberProfiles(db, group)
+    membersPreview: getGroupMemberProfiles(db, group),
+    activities: (group.activities || []).map((activity) => ({
+      ...activity,
+      premiumOnly: Boolean(activity.premiumOnly),
+      lockedByPlan: Boolean(activity.premiumOnly) && !entitlements.premiumActivities,
+      lockedReason: Boolean(activity.premiumOnly) && !entitlements.premiumActivities ? 'Disponibile con Plus.' : null,
+      isRsvped: currentUserId ? (activity.rsvps || []).includes(currentUserId) : false
+    }))
   };
 }
 
@@ -556,59 +297,47 @@ function scoreGroupForUser(group, user) {
   const comfortGap = Math.abs((group.targetComfort || 3) - (user.comfort || 3));
   const energyGap = Math.abs((group.energy || 3) - (user.energy || 3));
   const spaceBonus = (group.members || []).length < Number(group.sizeLimit || 0) ? 1 : -2;
-  const opennessBonus =
-    (group.members || []).length <= Math.max(2, Math.floor(Number(group.sizeLimit || 0) / 2))
-      ? 0.8
-      : 0.25;
+  const opennessBonus = (group.members || []).length <= Math.max(2, Math.floor(Number(group.sizeLimit || 0) / 2)) ? 0.8 : 0.25;
 
-  return Number(
-    (commonInterests * 3 - comfortGap * 1.1 - energyGap * 0.7 + spaceBonus + opennessBonus).toFixed(2)
-  );
+  return Number((commonInterests * 3 - comfortGap * 1.1 - energyGap * 0.7 + spaceBonus + opennessBonus).toFixed(2));
 }
 
 function recommendGroups(db, userId) {
   const user = getUserById(db, userId);
   if (!user) return [];
 
+  const entitlements = getUserEntitlements(db, user);
+
   return db.groups
-    .filter(
-      (group) =>
-        !(group.members || []).includes(userId) &&
-        (group.members || []).length < Number(group.sizeLimit || 0)
-    )
+    .filter((group) => {
+      if ((group.members || []).includes(userId)) return false;
+      if ((group.members || []).length >= Number(group.sizeLimit || 0)) return false;
+      if (group.premiumOnly && !entitlements.premiumGroups) return false;
+      return true;
+    })
     .map((group) => ({
       ...serializeGroup(db, group, userId),
       matchScore: scoreGroupForUser(group, user),
       matchReasons: unique([
-        (group.tags || []).some((tag) => (user.interests || []).includes(tag))
-          ? 'Interessi in comune'
-          : null,
-        Math.abs((group.targetComfort || 3) - (user.comfort || 3)) <= 1
-          ? 'Comfort compatibile'
-          : null,
-        Math.abs((group.energy || 3) - (user.energy || 3)) <= 1
-          ? 'Ritmo sociale adatto'
-          : null,
-        (group.members || []).length <= Math.max(2, Math.floor(Number(group.sizeLimit || 0) / 2))
-          ? 'Gruppo aperto a nuovi ingressi'
-          : null
+        (group.tags || []).some((tag) => (user.interests || []).includes(tag)) ? 'Interessi in comune' : null,
+        Math.abs((group.targetComfort || 3) - (user.comfort || 3)) <= 1 ? 'Comfort compatibile' : null,
+        Math.abs((group.energy || 3) - (user.energy || 3)) <= 1 ? 'Ritmo sociale adatto' : null,
+        (group.members || []).length <= Math.max(2, Math.floor(Number(group.sizeLimit || 0) / 2)) ? 'Gruppo aperto a nuovi ingressi' : null
       ])
     }))
     .sort((a, b) => b.matchScore - a.matchScore)
-    .slice(0, 6);
+    .slice(0, entitlements.isPaid ? 6 : 4);
 }
 
-function recommendBuddy(db, userId) {
+function recommendBuddies(db, userId, limit = 1) {
   const user = getUserById(db, userId);
-  if (!user) return null;
+  if (!user) return [];
 
-  const candidates = db.users
+  return db.users
     .filter((candidate) => candidate.id !== userId && candidate.buddyEligible)
     .map((candidate) => {
       const candidateInterests = Array.isArray(candidate.interests) ? candidate.interests : [];
-      const sharedInterests = candidateInterests.filter((interest) =>
-        (user.interests || []).includes(interest)
-      );
+      const sharedInterests = candidateInterests.filter((interest) => (user.interests || []).includes(interest));
       const comfortGap = Math.abs((candidate.comfort || 3) - (user.comfort || 3));
       const score = sharedInterests.length * 3 + (candidate.mentor ? 1.5 : 0) - comfortGap;
 
@@ -623,9 +352,12 @@ function recommendBuddy(db, userId) {
         score
       };
     })
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
+}
 
-  return candidates[0] || null;
+function recommendBuddy(db, userId) {
+  return recommendBuddies(db, userId, 1)[0] || null;
 }
 
 function computeActionPlan(summary) {
@@ -633,51 +365,52 @@ function computeActionPlan(summary) {
 
   const actions = [];
 
-  if (!summary.myGroups.length) {
-    actions.push('Entra in un primo cerchio consigliato con pochi membri.');
-  }
-
-  if (summary.stats.plannedActivities === 0) {
-    actions.push('Prenota una micro-attività guidata per rompere il ghiaccio in modo semplice.');
-  }
-
-  if (summary.buddy) {
-    actions.push(`Scrivi al buddy suggerito: ${summary.buddy.name}.`);
-  }
-
-  if (summary.stats.recentAnxietyAverage >= 3) {
-    actions.push('Scegli gruppi con comfort basso o medio e attività strutturate.');
-  }
-
-  if (summary.stats.recentInclusionAverage <= 3) {
-    actions.push('Fai un check-in dopo il prossimo incontro per migliorare i suggerimenti.');
-  }
+  if (!summary.myGroups.length) actions.push('Entra in un primo cerchio consigliato con pochi membri.');
+  if (summary.stats.plannedActivities === 0) actions.push('Prenota una micro-attività guidata per rompere il ghiaccio in modo semplice.');
+  if (summary.buddy) actions.push(`Scrivi al buddy suggerito: ${summary.buddy.name}.`);
+  if (summary.stats.recentAnxietyAverage >= 3) actions.push('Scegli gruppi con comfort basso o medio e attività strutturate.');
+  if (summary.stats.recentInclusionAverage <= 3) actions.push('Fai un check-in dopo il prossimo incontro per migliorare i suggerimenti.');
 
   return unique(actions).slice(0, 4);
+}
+
+
+function computeAdvancedInsights(summary) {
+  if (!summary) return null;
+
+  const stabilityBase = 100 - summary.stats.recentAnxietyAverage * 12 + summary.stats.recentInclusionAverage * 7;
+  const momentumBase = summary.stats.belongingScore + summary.stats.plannedActivities * 4 + summary.stats.joinedGroups * 3;
+
+  return {
+    momentumScore: clamp(Math.round(momentumBase), 0, 100),
+    socialStabilityScore: clamp(Math.round(stabilityBase), 0, 100),
+    nextBestAction: summary.actionPlan[0] || 'Continua con un gruppo coerente con il tuo ritmo.',
+    unlockHint: summary.account?.isPaid ? null : 'Con Plus sblocchi gruppi premium, più buddy match e insight avanzati.'
+  };
 }
 
 function computeUserSummary(db, userId) {
   const user = getUserById(db, userId);
   if (!user) return null;
 
+  const entitlements = getUserEntitlements(db, user);
   const myGroups = db.groups.filter((group) => (group.members || []).includes(userId));
   const checkins = getUserCheckins(db, userId);
   const recentCheckins = checkins.slice(0, 5);
-
   const reports = getUserReports(db, userId).map((report) => ({
     ...report,
     statusLabel:
-      report.status === 'reviewing' ? 'In revisione' : report.status === 'resolved' ? 'Risolta' : 'Aperta'
+      report.status === 'reviewing'
+        ? 'In revisione'
+        : report.status === 'resolved'
+          ? 'Risolta'
+          : 'Aperta'
   }));
 
   const belongingAvg = avg(recentCheckins.map((item) => item.included || 0));
   const anxietyAvg = avg(recentCheckins.map((item) => item.anxiety || 0));
-
   const activityCount = myGroups.reduce((sum, group) => {
-    return (
-      sum +
-      (group.activities || []).filter((activity) => (activity.rsvps || []).includes(userId)).length
-    );
+    return sum + (group.activities || []).filter((activity) => (activity.rsvps || []).includes(userId)).length;
   }, 0);
 
   const stats = {
@@ -695,19 +428,40 @@ function computeUserSummary(db, userId) {
     reportsOpen: reports.filter((report) => report.status !== 'resolved').length
   };
 
+  const buddyMatches = recommendBuddies(db, userId, entitlements.buddyMatches);
+
   const summary = {
     user,
+    account: {
+      email: user.email || '',
+      planCode: entitlements.planCode,
+      planLabel: entitlements.planLabel,
+      isPaid: entitlements.isPaid,
+      entitlements
+    },
     stats,
     myGroups: myGroups.map((group) => serializeGroup(db, group, userId)),
     recommendations: recommendGroups(db, userId),
-    buddy: recommendBuddy(db, userId),
+    buddy: buddyMatches[0] || null,
+    buddyMatches,
     checkins,
     reports
   };
 
+  const actionPlan = computeActionPlan(summary);
+
   return {
     ...summary,
-    actionPlan: computeActionPlan(summary)
+    actionPlan: entitlements.advancedInsights ? actionPlan : actionPlan.slice(0, 2),
+    advancedInsights: entitlements.advancedInsights ? computeAdvancedInsights({ ...summary, actionPlan }) : null,
+    lockedFeatures: entitlements.isPaid
+      ? []
+      : [
+          'Fino a 3 gruppi attivi',
+          'Fino a 3 buddy match',
+          'Gruppi e attività premium',
+          'Insight personali avanzati'
+        ]
   };
 }
 
@@ -725,9 +479,7 @@ function computeInsights(db) {
     .map((group) => ({
       id: group.id,
       name: group.name,
-      fillRate: Number(
-        (((group.members || []).length / Math.max(Number(group.sizeLimit || 1), 1))).toFixed(2)
-      ),
+      fillRate: Number((((group.members || []).length / Math.max(Number(group.sizeLimit || 1), 1))).toFixed(2)),
       spotsLeft: Math.max(Number(group.sizeLimit || 0) - (group.members || []).length, 0)
     }))
     .sort((a, b) => a.spotsLeft - b.spotsLeft);
@@ -739,14 +491,16 @@ function computeInsights(db) {
     averageInclusion: Number(avg(includedValues).toFixed(1)),
     averageAnxiety: Number(avg(anxietyValues).toFixed(1)),
     openReports: db.reports.filter((report) => report.status !== 'resolved').length,
-    waitlistCount: db.waitlist.length,
-    partnerLeadsCount: db.partnerLeads.length,
-    lonelyUsers: lonelyUsers.map((user) => ({
-      id: user.id,
-      name: user.name,
-      city: user.city
-    })),
-    closedGroups
+    waitlistCount: (db.waitlist || []).length,
+    partnerLeadsCount: (db.partnerLeads || []).length,
+    activeSubscriptions: (db.subscriptions || []).filter((item) => String(item.status || '').toLowerCase() === 'active').length,
+    lonelyUsers: lonelyUsers.map((user) => ({ id: user.id, name: user.name, city: user.city })),
+    closedGroups,
+    reportsByCategory: db.reports.reduce((acc, report) => {
+      const category = report.category || 'altro';
+      acc[category] = (acc[category] || 0) + 1;
+      return acc;
+    }, {})
   };
 }
 
@@ -754,6 +508,10 @@ function getMarketing(db) {
   return {
     plans: db.marketing?.plans || [],
     faqs: db.marketing?.faqs || [],
+    serviceMatrix: {
+      solo: getPlanEntitlements('solo'),
+      plus: getPlanEntitlements('plus_monthly')
+    },
     demoUsers: db.users.slice(0, 4).map((user) => ({
       id: user.id,
       name: user.name,
@@ -765,10 +523,7 @@ function getMarketing(db) {
 const mailTransport =
   nodemailer && GMAIL_USER && GMAIL_APP_PASSWORD
     ? nodemailer.createTransport({
-        host: SMTP_HOST,
-        port: SMTP_PORT,
-        secure: SMTP_SECURE,
-        service: SMTP_HOST === 'smtp.gmail.com' ? 'gmail' : undefined,
+        service: 'gmail',
         auth: {
           user: GMAIL_USER,
           pass: GMAIL_APP_PASSWORD
@@ -778,6 +533,7 @@ const mailTransport =
 
 async function sendEmail({ to, subject, html }) {
   if (!mailTransport || !to) return;
+
   await mailTransport.sendMail({
     from: GMAIL_USER,
     to,
@@ -799,208 +555,42 @@ app.get('/', (req, res) => {
     ok: true,
     service: 'inclusio-api',
     message: 'Backend attivo. Il frontend pubblico è pensato per Vercel.',
-    endpoints: [
-      '/api/health',
-      '/api/bootstrap',
-      '/api/users/onboard',
-      '/api/waitlist',
-      '/api/partner-leads',
-      '/api/billing/status',
-      '/api/billing/plus-checkout',
-      '/api/billing/school-checkout',
-      '/api/stripe/webhook'
-    ]
+    endpoints: ['/api/health', '/api/bootstrap', '/api/users/onboard', '/api/waitlist', '/api/partner-leads', '/api/subscriptions/lookup', '/api/subscriptions/activate']
   });
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({
-    ok: true,
-    service: 'inclusio-api',
-    now: new Date().toISOString()
-  });
+  res.json({ ok: true, service: 'inclusio-api', now: new Date().toISOString() });
 });
 
 app.get('/api/bootstrap', (req, res) => {
-  const db = readDb();
+  const db = await readDb();
   const userId = req.query.userId ? String(req.query.userId) : null;
+  const emailValue = req.query.email ? email(req.query.email) : '';
+  const previewPlanCode = emailValue ? getPlanCodeForEmail(db, emailValue) : 'solo';
 
   res.json({
     appName: 'Inclusio',
     interests: db.interests,
     summary: userId ? computeUserSummary(db, userId) : null,
     insights: computeInsights(db),
-    marketing: getMarketing(db)
-  });
-});
-
-app.get('/api/billing/status', (req, res) => {
-  const db = readDb();
-  const emailValue = email(req.query.email || '');
-  const organization = text(req.query.organization, 120);
-
-  if (!emailValue && !organization) {
-    return res.status(400).json({ error: 'Passa almeno email o organization.' });
-  }
-
-  const subscription = getActiveSubscription(db, {
-    email: emailValue,
-    organization
-  });
-
-  if (!subscription) {
-    return res.json({
-      ok: true,
-      active: false,
-      subscription: {
-        planCode: 'solo',
-        planLabel: 'Solo',
-        entitlements: getPlanEntitlements('solo')
-      }
-    });
-  }
-
-  return res.json({
-    ok: true,
-    active: true,
-    subscription: {
-      ...subscription,
-      entitlements: getPlanEntitlements(subscription.planCode)
-    }
-  });
-});
-
-app.post('/api/billing/plus-checkout', async (req, res) => {
-  if (!stripe) {
-    return res.status(500).json({ error: 'Stripe non configurato sul backend.' });
-  }
-
-  if (!APP_BASE_URL) {
-    return res.status(500).json({ error: 'APP_BASE_URL non configurato sul backend.' });
-  }
-
-  const contactName = text(req.body.contactName || req.body.name, 80);
-  const billingEmail = email(req.body.billingEmail || req.body.email);
-  const planCode = normalizePlanCode(req.body.planCode);
-
-  if (!isValidEmail(billingEmail)) {
-    return res.status(400).json({ error: 'Inserisci una email valida.' });
-  }
-
-  if (!['plus_monthly', 'plus_annual'].includes(planCode)) {
-    return res.status(400).json({ error: 'Piano Plus non valido.' });
-  }
-
-  const priceId = getPriceIdForPlan(planCode);
-
-  if (!priceId) {
-    return res.status(500).json({ error: 'Prezzo Stripe del piano Plus non configurato.' });
-  }
-
-  try {
-    const session = await stripe.checkout.sessions.create({
-      mode: 'subscription',
-      customer_email: billingEmail,
-      billing_address_collection: 'auto',
-      allow_promotion_codes: true,
-      line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${APP_BASE_URL}/prezzi?checkout=success&plan=${planCode}`,
-      cancel_url: `${APP_BASE_URL}/prezzi?checkout=cancelled&plan=${planCode}`,
-      metadata: {
-        planCode,
-        billingEmail,
-        contactName
-      },
-      subscription_data: {
-        metadata: {
-          planCode,
-          billingEmail,
-          contactName
+    marketing: getMarketing(db),
+    billingPreview: emailValue
+      ? {
+          email: emailValue,
+          planCode: previewPlanCode,
+          planLabel: getPlanLabel(previewPlanCode),
+          entitlements: getPlanEntitlements(previewPlanCode)
         }
-      }
-    });
-
-    return res.json({
-      ok: true,
-      url: session.url
-    });
-  } catch (error) {
-    console.error('Plus checkout create failed:', error);
-    return res.status(500).json({ error: 'Impossibile creare il checkout Stripe.' });
-  }
-});
-
-app.post('/api/billing/school-checkout', async (req, res) => {
-  if (!stripe) {
-    return res.status(500).json({ error: 'Stripe non configurato sul backend.' });
-  }
-
-  if (!APP_BASE_URL) {
-    return res.status(500).json({ error: 'APP_BASE_URL non configurato sul backend.' });
-  }
-
-  const organization = text(req.body.organization, 120);
-  const billingEmail = email(req.body.billingEmail || req.body.email);
-  const contactName = text(req.body.contactName || req.body.name, 80);
-  const schoolSize = text(req.body.schoolSize, 60);
-  const planCode = normalizePlanCode(req.body.planCode);
-
-  if (!organization || !isValidEmail(billingEmail)) {
-    return res.status(400).json({ error: 'Inserisci nome scuola ed email di fatturazione validi.' });
-  }
-
-  if (!['school_starter', 'school_pro'].includes(planCode)) {
-    return res.status(400).json({ error: 'Per questa fascia è necessario usare Starter o Pro.' });
-  }
-
-  const priceId = getPriceIdForPlan(planCode);
-
-  if (!priceId) {
-    return res.status(500).json({ error: 'Prezzo Stripe del piano scuola non configurato.' });
-  }
-
-  try {
-    const session = await stripe.checkout.sessions.create({
-      mode: 'subscription',
-      customer_email: billingEmail,
-      billing_address_collection: 'required',
-      tax_id_collection: { enabled: true },
-      allow_promotion_codes: true,
-      line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${APP_BASE_URL}/organizzazioni?checkout=success&plan=${planCode}`,
-      cancel_url: `${APP_BASE_URL}/organizzazioni?checkout=cancelled&plan=${planCode}`,
-      metadata: {
-        planCode,
-        organization,
-        billingEmail,
-        contactName,
-        schoolSize
-      },
-      subscription_data: {
-        metadata: {
-          planCode,
-          organization,
-          billingEmail,
-          contactName,
-          schoolSize
-        }
-      }
-    });
-
-    return res.json({
-      ok: true,
-      url: session.url
-    });
-  } catch (error) {
-    console.error('School checkout create failed:', error);
-    return res.status(500).json({ error: 'Impossibile creare il checkout Stripe.' });
-  }
+      : null
+  });
 });
 
 app.post('/api/users/onboard', (req, res) => {
-  const db = readDb();
+  const db = await readDb();
 
   const name = text(req.body.name, 40);
+  const emailValue = email(req.body.email);
   const city = text(req.body.city, 40) || 'Online';
   const comfort = clamp(Number(req.body.comfort || 3), 1, 5);
   const energy = clamp(Number(req.body.energy || 3), 1, 5);
@@ -1016,9 +606,19 @@ app.post('/api/users/onboard', (req, res) => {
     return res.status(400).json({ error: 'Il nome è obbligatorio.' });
   }
 
+  if (req.body.email && !isValidEmail(emailValue)) {
+    return res.status(400).json({ error: 'Inserisci un indirizzo email valido.' });
+  }
+
+  if (emailValue && db.users.find((item) => item.email === emailValue)) {
+    return res.status(409).json({ error: 'Esiste già un profilo associato a questa email.' });
+  }
+
   const user = {
     id: `u-${slugify(name)}-${Math.random().toString(36).slice(2, 6)}`,
     name,
+    email: emailValue,
+    planCode: getPlanCodeForEmail(db, emailValue),
     city,
     interests,
     goals,
@@ -1031,7 +631,7 @@ app.post('/api/users/onboard', (req, res) => {
   };
 
   db.users.push(user);
-  writeDb(db);
+  await writeDb(db);
 
   return res.status(201).json({
     user,
@@ -1041,7 +641,7 @@ app.post('/api/users/onboard', (req, res) => {
 });
 
 app.get('/api/users/:userId', (req, res) => {
-  const db = readDb();
+  const db = await readDb();
   const summary = computeUserSummary(db, req.params.userId);
 
   if (!summary) {
@@ -1052,13 +652,13 @@ app.get('/api/users/:userId', (req, res) => {
 });
 
 app.get('/api/groups', (req, res) => {
-  const db = readDb();
+  const db = await readDb();
   const userId = req.query.userId ? String(req.query.userId) : null;
   res.json(db.groups.map((group) => serializeGroup(db, group, userId)));
 });
 
 app.post('/api/groups/:groupId/join', (req, res) => {
-  const db = readDb();
+  const db = await readDb();
   const userId = String(req.body.userId || '');
   const group = db.groups.find((item) => item.id === req.params.groupId);
   const user = getUserById(db, userId);
@@ -1067,10 +667,19 @@ app.post('/api/groups/:groupId/join', (req, res) => {
     return res.status(404).json({ error: 'Gruppo o profilo non trovato.' });
   }
 
+  const entitlements = getUserEntitlements(db, user);
+
   if ((group.members || []).includes(userId)) {
-    return res.json({
-      summary: computeUserSummary(db, userId),
-      message: 'Sei già in questo gruppo.'
+    return res.json({ summary: computeUserSummary(db, userId), message: 'Sei già in questo gruppo.' });
+  }
+
+  if (group.premiumOnly && !entitlements.premiumGroups) {
+    return res.status(403).json({ error: 'Questo gruppo è disponibile con Plus.' });
+  }
+
+  if ((user.joinedGroupIds || []).length >= entitlements.maxGroups) {
+    return res.status(403).json({
+      error: `Il piano ${entitlements.planLabel} consente fino a ${entitlements.maxGroups} gruppi attivi.`
     });
   }
 
@@ -1080,16 +689,13 @@ app.post('/api/groups/:groupId/join', (req, res) => {
 
   group.members.push(userId);
   user.joinedGroupIds = unique([...(user.joinedGroupIds || []), group.id]);
-  writeDb(db);
 
-  res.json({
-    summary: computeUserSummary(db, userId),
-    message: 'Ingresso nel gruppo completato.'
-  });
+  await writeDb(db);
+  res.json({ summary: computeUserSummary(db, userId), message: 'Ingresso nel gruppo completato.' });
 });
 
 app.post('/api/groups/:groupId/leave', (req, res) => {
-  const db = readDb();
+  const db = await readDb();
   const userId = String(req.body.userId || '');
   const group = db.groups.find((item) => item.id === req.params.groupId);
   const user = getUserById(db, userId);
@@ -1105,16 +711,12 @@ app.post('/api/groups/:groupId/leave', (req, res) => {
     activity.rsvps = (activity.rsvps || []).filter((id) => id !== userId);
   });
 
-  writeDb(db);
-
-  res.json({
-    summary: computeUserSummary(db, userId),
-    message: 'Hai lasciato il gruppo.'
-  });
+  await writeDb(db);
+  res.json({ summary: computeUserSummary(db, userId), message: 'Hai lasciato il gruppo.' });
 });
 
 app.post('/api/groups/:groupId/activities/:activityId/rsvp', (req, res) => {
-  const db = readDb();
+  const db = await readDb();
   const userId = String(req.body.userId || '');
   const group = db.groups.find((item) => item.id === req.params.groupId);
   const user = getUserById(db, userId);
@@ -1133,22 +735,24 @@ app.post('/api/groups/:groupId/activities/:activityId/rsvp', (req, res) => {
     return res.status(404).json({ error: 'Attività non trovata.' });
   }
 
+  const entitlements = getUserEntitlements(db, user);
+
+  if (activity.premiumOnly && !entitlements.premiumActivities) {
+    return res.status(403).json({ error: 'Questa attività è disponibile con Plus.' });
+  }
+
   if ((activity.rsvps || []).includes(userId)) {
     activity.rsvps = activity.rsvps.filter((id) => id !== userId);
   } else {
     activity.rsvps = [...(activity.rsvps || []), userId];
   }
 
-  writeDb(db);
-
-  res.json({
-    summary: computeUserSummary(db, userId),
-    message: 'Partecipazione aggiornata.'
-  });
+  await writeDb(db);
+  res.json({ summary: computeUserSummary(db, userId), message: 'Partecipazione aggiornata.' });
 });
 
 app.post('/api/checkins', (req, res) => {
-  const db = readDb();
+  const db = await readDb();
   const userId = String(req.body.userId || '');
   const user = getUserById(db, userId);
 
@@ -1167,7 +771,7 @@ app.post('/api/checkins', (req, res) => {
   };
 
   db.checkins.unshift(checkin);
-  writeDb(db);
+  await writeDb(db);
 
   res.status(201).json({
     checkin,
@@ -1177,7 +781,7 @@ app.post('/api/checkins', (req, res) => {
 });
 
 app.post('/api/reports', (req, res) => {
-  const db = readDb();
+  const db = await readDb();
   const userId = String(req.body.userId || '');
   const user = getUserById(db, userId);
 
@@ -1196,7 +800,7 @@ app.post('/api/reports', (req, res) => {
   };
 
   db.reports.unshift(report);
-  writeDb(db);
+  await writeDb(db);
 
   res.status(201).json({
     report,
@@ -1206,7 +810,8 @@ app.post('/api/reports', (req, res) => {
 });
 
 app.post('/api/waitlist', async (req, res) => {
-  const db = readDb();
+  const db = await readDb();
+
   const nameValue = text(req.body.name, 60);
   const emailValue = email(req.body.email);
   const role = text(req.body.role, 40) || 'individual';
@@ -1216,13 +821,11 @@ app.post('/api/waitlist', async (req, res) => {
     return res.status(400).json({ error: 'Inserisci nome ed email validi.' });
   }
 
+  db.waitlist = db.waitlist || [];
   const existing = db.waitlist.find((item) => item.email === emailValue);
 
   if (existing) {
-    return res.json({
-      ok: true,
-      message: "Questa email è già presente nella lista d'attesa."
-    });
+    return res.json({ ok: true, message: "Questa email è già presente nella lista d'attesa." });
   }
 
   db.waitlist.unshift({
@@ -1234,7 +837,7 @@ app.post('/api/waitlist', async (req, res) => {
     createdAt: new Date().toISOString()
   });
 
-  writeDb(db);
+  await writeDb(db);
 
   await Promise.all([
     safeSendEmail({
@@ -1242,10 +845,10 @@ app.post('/api/waitlist', async (req, res) => {
       subject: `[Inclusio] Nuova iscrizione waitlist — ${nameValue}`,
       html: `
         <h2>Nuova iscrizione waitlist</h2>
-        <p><strong>Nome:</strong> ${esc(nameValue)}</p>
-        <p><strong>Email:</strong> ${esc(emailValue)}</p>
-        <p><strong>Ruolo:</strong> ${esc(role)}</p>
-        <p><strong>Goal:</strong> ${esc(goal)}</p>
+        <p><strong>Nome:</strong> ${nameValue}</p>
+        <p><strong>Email:</strong> ${emailValue}</p>
+        <p><strong>Ruolo:</strong> ${role}</p>
+        <p><strong>Goal:</strong> ${goal}</p>
       `
     }),
     safeSendEmail({
@@ -1253,9 +856,9 @@ app.post('/api/waitlist', async (req, res) => {
       subject: 'Inclusio — iscrizione confermata',
       html: `
         <h2>Iscrizione confermata</h2>
-        <p>Ciao ${esc(nameValue)},</p>
+        <p>Ciao ${nameValue},</p>
         <p>abbiamo ricevuto la tua richiesta di accesso anticipato.</p>
-        <p><a href="${APP_BASE_URL || '#'}">Vai al sito</a></p>
+        <p><a href="${APP_BASE_URL}">Vai al sito</a></p>
       `
     })
   ]);
@@ -1267,21 +870,20 @@ app.post('/api/waitlist', async (req, res) => {
 });
 
 app.post('/api/partner-leads', async (req, res) => {
-  const db = readDb();
+  const db = await readDb();
 
   const nameValue = text(req.body.name, 60);
   const emailValue = email(req.body.email);
   const organization = text(req.body.organization, 80);
-  const tierInput = text(req.body.tier, 40).toLowerCase();
-  const tierMap = {
-    school_starter: 'starter',
-    school_pro: 'pro',
-    starter: 'starter',
-    pro: 'pro',
-    campus: 'campus',
-    custom: 'custom'
-  };
-  const tier = tierMap[tierInput] || 'custom';
+  const tier = ['school_starter', 'school_pro', 'custom'].includes(req.body.tier)
+    ? req.body.tier
+    : 'school_starter';
+  const tierLabel =
+    tier === 'school_pro'
+      ? 'School Pro'
+      : tier === 'custom'
+        ? 'Custom'
+        : 'School Starter';
   const goal = text(req.body.goal, 60);
   const message = text(req.body.message, 400);
 
@@ -1289,18 +891,20 @@ app.post('/api/partner-leads', async (req, res) => {
     return res.status(400).json({ error: 'Completa nome, email e organizzazione.' });
   }
 
+  db.partnerLeads = db.partnerLeads || [];
   db.partnerLeads.unshift({
     id: makeId('p'),
     name: nameValue,
     email: emailValue,
     organization,
     tier,
+    tierLabel,
     goal,
     message,
     createdAt: new Date().toISOString()
   });
 
-  writeDb(db);
+  await writeDb(db);
 
   await Promise.all([
     safeSendEmail({
@@ -1308,55 +912,148 @@ app.post('/api/partner-leads', async (req, res) => {
       subject: `[Inclusio] Nuovo lead partner — ${organization} (${tier})`,
       html: `
         <h2>Nuovo lead partner</h2>
-        <p><strong>Nome:</strong> ${esc(nameValue)}</p>
-        <p><strong>Email:</strong> ${esc(emailValue)}</p>
-        <p><strong>Organizzazione:</strong> ${esc(organization)}</p>
-        <p><strong>Pacchetto:</strong> ${esc(tier)}</p>
-        <p><strong>Goal:</strong> ${esc(goal)}</p>
-        <p><strong>Messaggio:</strong><br>${esc(message || 'Nessun messaggio')}</p>
+        <p><strong>Nome:</strong> ${nameValue}</p>
+        <p><strong>Email:</strong> ${emailValue}</p>
+        <p><strong>Organizzazione:</strong> ${organization}</p>
+        <p><strong>Pacchetto:</strong> ${tierLabel}</p>
+        <p><strong>Goal:</strong> ${goal}</p>
+        <p><strong>Messaggio:</strong><br>${message || 'Nessun messaggio'}</p>
       `
     }),
     safeSendEmail({
       to: emailValue,
-      subject: 'Inclusio — richiesta proposta ricevuta',
+      subject: 'Inclusio — richiesta demo ricevuta',
       html: `
-        <h2>Richiesta proposta ricevuta</h2>
-        <p>Ciao ${esc(nameValue)},</p>
-        <p>abbiamo ricevuto la tua richiesta per ${esc(organization)}.</p>
+        <h2>Richiesta demo ricevuta</h2>
+        <p>Ciao ${nameValue},</p>
+        <p>abbiamo ricevuto la tua richiesta per <strong>${organization}</strong>.</p>
+        <p><strong>Pacchetto richiesto:</strong> ${tierLabel}</p>
         <p>Ti ricontatteremo presto.</p>
-        <p><a href="${APP_BASE_URL || '#'}">Vai al sito</a></p>
+        <p><a href="${APP_BASE_URL}">Vai al sito</a></p>
       `
     })
   ]);
 
   return res.status(201).json({
     ok: true,
-    message: 'Richiesta Enterprise ricevuta. Ti contatteremo per proposta personalizzata.'
+    message:
+      tier === 'custom'
+        ? 'Richiesta personalizzata ricevuta. Ti contatteremo per proposta e setup.'
+        : tier === 'school_pro'
+          ? 'Richiesta School Pro ricevuta. Ti contatteremo per demo e setup avanzato.'
+          : 'Richiesta School Starter ricevuta. Ti contatteremo per demo e setup iniziale.'
+  });
+
+});
+
+app.get('/api/subscriptions/lookup', (req, res) => {
+  const db = await readDb();
+  const emailValue = email(req.query.email);
+
+  if (!isValidEmail(emailValue)) {
+    return res.status(400).json({ error: 'Inserisci una email valida.' });
+  }
+
+  const planCode = getPlanCodeForEmail(db, emailValue);
+  const subscription = getActiveSubscriptionByEmail(db, emailValue);
+
+  return res.json({
+    ok: true,
+    email: emailValue,
+    planCode,
+    planLabel: getPlanLabel(planCode),
+    entitlements: getPlanEntitlements(planCode),
+    subscription
+  });
+});
+
+app.post('/api/subscriptions/activate', async (req, res) => {
+  const adminToken = String(req.headers['x-billing-token'] || req.body.adminToken || '').trim();
+
+  if (!BILLING_ADMIN_TOKEN || adminToken !== BILLING_ADMIN_TOKEN) {
+    return res.status(403).json({ error: 'Operazione non autorizzata.' });
+  }
+
+  const db = await readDb();
+  const emailValue = email(req.body.email);
+  const planCode = normalizePlanCode(req.body.planCode);
+  const source = text(req.body.source, 30) || 'manual';
+
+  if (!isValidEmail(emailValue)) {
+    return res.status(400).json({ error: 'Inserisci una email valida.' });
+  }
+
+  if (planCode === 'solo') {
+    return res.status(400).json({ error: 'Attiva un piano Plus valido.' });
+  }
+
+  const now = new Date().toISOString();
+
+  db.subscriptions = (db.subscriptions || []).map((subscription) =>
+    email(subscription.email) === emailValue && String(subscription.status || '').toLowerCase() === 'active'
+      ? { ...subscription, status: 'replaced', replacedAt: now }
+      : subscription
+  );
+
+  const subscription = {
+    id: makeId('sub'),
+    email: emailValue,
+    planCode,
+    status: 'active',
+    source,
+    createdAt: now,
+    activatedAt: now
+  };
+
+  db.subscriptions.unshift(subscription);
+
+  const existingUser = db.users.find((item) => item.email === emailValue);
+  if (existingUser) {
+    existingUser.planCode = planCode;
+  }
+
+  await writeDb(db);
+
+  await safeSendEmail({
+    to: emailValue,
+    subject: `Inclusio — ${getPlanLabel(planCode)} attivato`,
+    html: `
+      <h2>Piano attivato</h2>
+      <p>Il tuo piano <strong>${getPlanLabel(planCode)}</strong> è ora attivo.</p>
+      <p>Da questo momento hai accesso ai servizi extra previsti dal piano.</p>
+      <p><a href="${APP_BASE_URL}">Vai al sito</a></p>
+    `
+  });
+
+  return res.status(201).json({
+    ok: true,
+    email: emailValue,
+    planCode,
+    planLabel: getPlanLabel(planCode),
+    entitlements: getPlanEntitlements(planCode),
+    subscription
   });
 });
 
 app.post('/api/reset', (req, res) => {
   fs.copyFileSync(SEED_PATH, DB_PATH);
-  res.json({
-    ok: true,
-    message: 'Ambiente demo ripristinato.'
-  });
+  res.json({ ok: true, message: 'Ambiente demo ripristinato.' });
 });
 
 app.get('/favicon.ico', (req, res) => {
   res.status(204).end();
 });
 
-app.listen(PORT, HOST, () => {
-  console.log(`Inclusio API in ascolto su http://${HOST}:${PORT}`);
-
-  if (!nodemailer) {
-    console.log('Nodemailer non installato: email disabilitate.');
-  } else if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
-    console.log('Credenziali Gmail mancanti: email disabilitate.');
+async function boot() {
+  try {
+    await ensureStateRow();
+    app.listen(PORT, HOST, () => {
+      console.log(`Inclusio API in ascolto su http://${HOST}:${PORT}`);
+    });
+  } catch (error) {
+    console.error('Postgres init failed:', error);
+    process.exit(1);
   }
+}
 
-  if (!stripe) {
-    console.log('Stripe non configurato: checkout disabilitato finché non imposti STRIPE_SECRET_KEY');
-  }
-});
+boot();
