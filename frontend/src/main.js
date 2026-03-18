@@ -1,8 +1,6 @@
 import './styles.css';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
-const STRIPE_PLUS_MONTHLY = import.meta.env.VITE_STRIPE_LINK_PLUS_MONTHLY || '';
-const STRIPE_PLUS_ANNUAL = import.meta.env.VITE_STRIPE_LINK_PLUS_ANNUAL || '';
 
 const appState = {
   currentUserId: null,
@@ -92,33 +90,6 @@ function emptyCard(message) {
   `;
 }
 
-function wireStripeButtons() {
-  const monthlyBtn = $('#plus-monthly-btn');
-  const annualBtn = $('#plus-annual-btn');
-  const monthlyNote = $('#plus-monthly-note');
-  const annualNote = $('#plus-annual-note');
-
-  if (monthlyBtn) {
-    monthlyBtn.href = STRIPE_PLUS_MONTHLY || '/lista-attesa';
-  }
-
-  if (annualBtn) {
-    annualBtn.href = STRIPE_PLUS_ANNUAL || '/lista-attesa';
-  }
-
-  if (monthlyNote) {
-    monthlyNote.textContent = STRIPE_PLUS_MONTHLY
-      ? 'Pagamento mensile con Stripe.'
-      : 'Configura VITE_STRIPE_LINK_PLUS_MONTHLY per aprire Stripe.';
-  }
-
-  if (annualNote) {
-    annualNote.textContent = STRIPE_PLUS_ANNUAL
-      ? 'Pagamento annuale con Stripe.'
-      : 'Configura VITE_STRIPE_LINK_PLUS_ANNUAL per aprire Stripe.';
-  }
-}
-
 function wireForm(selector, path, successSelector) {
   const form = $(selector);
   const success = $(successSelector);
@@ -159,6 +130,66 @@ function wireForm(selector, path, successSelector) {
   });
 }
 
+function wirePlusCheckout() {
+  const form = $('#plus-checkout-form');
+  const buttons = document.querySelectorAll('[data-plus-plan]');
+  const result = $('#plus-checkout-result');
+
+  if (!form || !buttons.length) return;
+
+  const params = new URLSearchParams(window.location.search);
+
+  if (result && params.get('checkout') === 'success') {
+    result.textContent = 'Pagamento completato. Il piano Plus risulta in attivazione automatica.';
+    result.classList.add('show');
+  }
+
+  if (result && params.get('checkout') === 'cancelled') {
+    result.textContent = 'Checkout annullato. Nessuna attivazione eseguita.';
+    result.classList.add('show');
+  }
+
+  buttons.forEach((button) => {
+    button.addEventListener('click', async () => {
+      const contactName = form.elements.contactName?.value.trim() || '';
+      const billingEmail = form.elements.billingEmail?.value.trim() || '';
+      const planCode = button.dataset.plusPlan || '';
+
+      if (!billingEmail) {
+        showResult('#plus-checkout-result', 'Inserisci l’email prima del pagamento.');
+        return;
+      }
+
+      const originalLabel = button.textContent;
+      buttons.forEach((node) => {
+        node.disabled = true;
+      });
+
+      button.textContent = 'Reindirizzamento...';
+
+      try {
+        const payload = await sendJson('/api/billing/plus-checkout', {
+          contactName,
+          billingEmail,
+          planCode
+        });
+
+        if (!payload.url) {
+          throw new Error('URL checkout mancante.');
+        }
+
+        window.location.href = payload.url;
+      } catch (error) {
+        showResult('#plus-checkout-result', error.message || 'Impossibile aprire il checkout.');
+        buttons.forEach((node) => {
+          node.disabled = false;
+        });
+        button.textContent = originalLabel;
+      }
+    });
+  });
+}
+
 function getSchoolCheckoutContext() {
   const schoolForm = $('#school-checkout-form');
 
@@ -195,7 +226,7 @@ function wireSchoolCheckout() {
 
   if (resultNode && params.get('checkout') === 'success') {
     resultNode.textContent =
-      'Pagamento completato. L’attivazione automatica è in corso: controlla la mail di fatturazione.';
+      'Pagamento completato. L’attivazione automatica della scuola è in corso.';
     resultNode.classList.add('show');
   }
 
@@ -633,9 +664,9 @@ function wireAppActions() {
   });
 }
 
-wireStripeButtons();
 wireForm('#waitlist-form', '/api/waitlist', '#waitlist-result');
 wireForm('#partner-form', '/api/partner-leads', '#partner-result');
+wirePlusCheckout();
 wireSchoolCheckout();
 wireDemoOnboarding();
 wireCheckinForm();

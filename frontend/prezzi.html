@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Inclusio — prezzi</title>
-  <meta name="description" content="Prezzi Inclusio per utenti singoli e scuole con CTA Stripe reali e checkout scuole separato." />
+  <meta name="description" content="Prezzi Inclusio per persone singole e scuole con attivazione abbonamenti via Stripe." />
   <script type="module" src="/src/main.js"></script>
 </head>
 <body>
@@ -35,11 +35,33 @@
     <section class="hero">
       <div class="container" style="display:grid; gap:16px;">
         <div class="kicker">Prezzi</div>
-        <h1>Prezzi distinti per persone singole e scuole, con CTA reali e funnel separati.</h1>
+        <h1>La demo dell’app resta disponibile nel piano gratuito. Plus e Scuole si attivano via Stripe.</h1>
         <p class="lead">
-          I piani Plus aprono Stripe direttamente. I piani scuola passano dal checkout dedicato
-          nella pagina Organizzazioni, dove raccogli solo i dati minimi prima del pagamento.
+          La superficie prodotto che vedi nella demo è disponibile anche per il piano Solo.
+          Plus e i piani Scuola attivano i rispettivi abbonamenti e i relativi permessi nel backend.
         </p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container" style="max-width:760px;">
+        <div class="card" style="display:grid; gap:16px;">
+          <h2>Dati minimi per attivare Plus</h2>
+
+          <form id="plus-checkout-form" style="display:grid; gap:12px;">
+            <label>
+              <span>Nome</span>
+              <input type="text" name="contactName" placeholder="Nome e cognome" />
+            </label>
+
+            <label>
+              <span>Email</span>
+              <input type="email" name="billingEmail" placeholder="tuamail@example.com" required />
+            </label>
+          </form>
+
+          <div id="plus-checkout-result" class="success-message" aria-live="polite"></div>
+        </div>
       </div>
     </section>
 
@@ -50,12 +72,12 @@
           <p>Per iniziare</p>
           <p><strong>€0 / mese</strong></p>
           <ul>
-            <li>accesso base ai gruppi aperti</li>
-            <li>1 buddy suggerito</li>
-            <li>check-in personali</li>
-            <li>supporto base</li>
+            <li>accesso alla demo prodotto</li>
+            <li>onboarding profilo</li>
+            <li>gruppi, buddy, RSVP</li>
+            <li>check-in e report</li>
           </ul>
-          <a class="btn btn-secondary" href="/app">Prova la demo</a>
+          <a class="btn btn-secondary" href="/app">Apri la versione gratuita</a>
         </article>
 
         <article class="card" style="display:grid; gap:12px;">
@@ -63,13 +85,12 @@
           <p>Per uso personale continuativo</p>
           <p><strong>€12,90 / mese</strong></p>
           <ul>
-            <li>cerchi premium</li>
-            <li>priorità negli ingressi</li>
-            <li>intro curate</li>
-            <li>insight personali avanzati</li>
+            <li>tutto del piano Solo</li>
+            <li>attivazione abbonamento nel backend</li>
+            <li>permessi Plus attivi dopo pagamento</li>
+            <li>base pronta per funzionalità premium</li>
           </ul>
-          <a id="plus-monthly-btn" class="btn btn-primary" href="/lista-attesa">Attiva Plus</a>
-          <p id="plus-monthly-note">Pagamento mensile con Stripe.</p>
+          <button type="button" class="btn btn-primary" data-plus-plan="plus_monthly">Attiva Plus</button>
         </article>
 
         <article class="card" style="display:grid; gap:12px;">
@@ -77,13 +98,12 @@
           <p>Per utenti fidelizzati</p>
           <p><strong>€119 / anno</strong></p>
           <ul>
-            <li>tutto del Plus</li>
-            <li>risparmio rispetto al mensile</li>
-            <li>accesso continuativo</li>
-            <li>priorità sulle novità</li>
+            <li>tutto del piano Solo</li>
+            <li>attivazione abbonamento nel backend</li>
+            <li>permessi Plus attivi dopo pagamento</li>
+            <li>rinnovo annuale</li>
           </ul>
-          <a id="plus-annual-btn" class="btn btn-primary" href="/lista-attesa">Attiva Plus Annuale</a>
-          <p id="plus-annual-note">Pagamento annuale con Stripe.</p>
+          <button type="button" class="btn btn-primary" data-plus-plan="plus_annual">Attiva Plus Annuale</button>
         </article>
       </div>
     </section>
@@ -95,10 +115,10 @@
           <p><strong>Fino a 400 studenti</strong></p>
           <p><strong>€1.990 / anno</strong></p>
           <ul>
+            <li>attivazione via Stripe</li>
+            <li>permessi scuola nel backend</li>
             <li>dashboard istituto</li>
-            <li>onboarding nuovi ingressi</li>
-            <li>gruppi e attività premium</li>
-            <li>insight avanzati</li>
+            <li>setup base organizzativo</li>
           </ul>
           <a class="btn btn-primary" href="/organizzazioni?tier=school_starter">Vai al checkout scuole</a>
         </article>
@@ -108,9 +128,9 @@
           <p><strong>Da 401 a 1.200 studenti</strong></p>
           <p><strong>€3.990 / anno</strong></p>
           <ul>
-            <li>tutto dello Starter</li>
+            <li>attivazione via Stripe</li>
+            <li>permessi scuola nel backend</li>
             <li>report esportabili</li>
-            <li>supporto prioritario</li>
             <li>setup più strutturato</li>
           </ul>
           <a class="btn btn-primary" href="/organizzazioni?tier=school_pro">Vai al checkout scuole</a>

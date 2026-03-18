@@ -23,6 +23,8 @@ const SMTP_SECURE = String(process.env.SMTP_SECURE || 'true') === 'true';
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
+const STRIPE_PRICE_PLUS_MONTHLY = process.env.STRIPE_PRICE_PLUS_MONTHLY || '';
+const STRIPE_PRICE_PLUS_ANNUAL = process.env.STRIPE_PRICE_PLUS_ANNUAL || '';
 const STRIPE_PRICE_SCHOOL_STARTER_YEARLY = process.env.STRIPE_PRICE_SCHOOL_STARTER_YEARLY || '';
 const STRIPE_PRICE_SCHOOL_PRO_YEARLY = process.env.STRIPE_PRICE_SCHOOL_PRO_YEARLY || '';
 
@@ -49,14 +51,16 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
       const customerEmail = email(session.customer_email || session.metadata?.billingEmail);
       const organization = text(session.metadata?.organization, 120);
       const schoolSize = text(session.metadata?.schoolSize, 60);
+      const contactName = text(session.metadata?.contactName, 80);
 
-      if (['school_starter', 'school_pro'].includes(planCode) && isValidEmail(customerEmail)) {
+      if (['plus_monthly', 'plus_annual', 'school_starter', 'school_pro'].includes(planCode) && isValidEmail(customerEmail)) {
         const db = readDb();
 
         const activated = activateSubscriptionRecord(db, {
           email: customerEmail,
           planCode,
           source: 'stripe_checkout',
+          contactName,
           organization,
           schoolSize,
           stripeCustomerId: text(session.customer, 80),
@@ -69,26 +73,24 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
         await Promise.all([
           safeSendEmail({
             to: OWNER_EMAIL,
-            subject: `[Inclusio] Scuola attivata — ${organization || customerEmail}`,
+            subject: `[Inclusio] Piano attivato — ${activated.planLabel}`,
             html: `
-              <h2>Pagamento scuola completato</h2>
-              <p><strong>Organizzazione:</strong> ${esc(organization || 'Non indicata')}</p>
-              <p><strong>Email fatturazione:</strong> ${esc(customerEmail)}</p>
+              <h2>Pagamento completato</h2>
+              <p><strong>Email:</strong> ${esc(customerEmail)}</p>
               <p><strong>Piano:</strong> ${esc(activated.planLabel)}</p>
-              <p><strong>Dimensione:</strong> ${esc(schoolSize || 'Non indicata')}</p>
-              <p><strong>Subscription ID:</strong> ${esc(session.subscription || 'n/d')}</p>
+              <p><strong>Referente:</strong> ${esc(contactName || 'n/d')}</p>
+              <p><strong>Organizzazione:</strong> ${esc(organization || 'n/d')}</p>
+              <p><strong>Dimensione:</strong> ${esc(schoolSize || 'n/d')}</p>
             `
           }),
           safeSendEmail({
             to: customerEmail,
-            subject: 'Inclusio — attivazione scuola completata',
+            subject: 'Inclusio — abbonamento attivato',
             html: `
               <h2>Attivazione completata</h2>
-              <p>Ciao,</p>
-              <p>il pagamento per <strong>${esc(organization || 'la tua organizzazione')}</strong> è stato registrato correttamente.</p>
-              <p><strong>Piano attivo:</strong> ${esc(activated.planLabel)}</p>
-              <p><strong>Fascia dimensionale:</strong> ${esc(schoolSize || 'Non indicata')}</p>
-              <p><a href="${APP_BASE_URL || '#'}">Vai al sito</a></p>
+              <p>Ciao${contactName ? ` ${esc(contactName)}` : ''},</p>
+              <p>il tuo piano <strong>${esc(activated.planLabel)}</strong> è attivo.</p>
+              <p><a href="${APP_BASE_URL || '#'}">Vai a Inclusio</a></p>
             `
           })
         ]);
@@ -286,7 +288,7 @@ function getPlanLabel(planCode = 'solo') {
   const normalized = normalizePlanCode(planCode);
 
   if (normalized === 'plus_annual') return 'Plus Annuale';
-  if (normalized === 'plus_monthly') return 'Plus Mensile';
+  if (normalized === 'plus_monthly') return 'Plus';
   if (normalized === 'school_starter') return 'School Starter';
   if (normalized === 'school_pro') return 'School Pro';
   if (normalized === 'custom') return 'Campus / Enterprise';
@@ -297,74 +299,100 @@ function getPlanLabel(planCode = 'solo') {
 function getPlanEntitlements(planCode = 'solo') {
   const normalized = normalizePlanCode(planCode);
 
+  const baseAccess = {
+    appAccess: true,
+    onboarding: true,
+    groups: true,
+    activities: true,
+    buddy: true,
+    checkins: true,
+    reports: true
+  };
+
   if (normalized === 'school_starter') {
     return {
+      ...baseAccess,
       planCode: normalized,
       planLabel: getPlanLabel(normalized),
       isPaid: true,
       isB2B: true,
-      orgDashboard: true,
       advancedInsights: true,
       premiumGroups: true,
       premiumActivities: true,
+      orgDashboard: true,
       exports: false,
-      multiCampus: false,
-      schoolSizeBand: 'fino a 400 studenti'
+      multiCampus: false
     };
   }
 
   if (normalized === 'school_pro') {
     return {
+      ...baseAccess,
       planCode: normalized,
       planLabel: getPlanLabel(normalized),
       isPaid: true,
       isB2B: true,
-      orgDashboard: true,
       advancedInsights: true,
       premiumGroups: true,
       premiumActivities: true,
+      orgDashboard: true,
       exports: true,
-      multiCampus: true,
-      schoolSizeBand: 'da 401 a 1.200 studenti'
+      multiCampus: true
     };
   }
 
   if (normalized === 'custom') {
     return {
+      ...baseAccess,
       planCode: normalized,
       planLabel: getPlanLabel(normalized),
       isPaid: true,
       isB2B: true,
-      orgDashboard: true,
       advancedInsights: true,
       premiumGroups: true,
       premiumActivities: true,
+      orgDashboard: true,
       exports: true,
-      multiCampus: true,
-      schoolSizeBand: 'oltre 1.200 studenti / multisede'
+      multiCampus: true
     };
   }
 
-  const isPaid = normalized === 'plus_monthly' || normalized === 'plus_annual';
+  if (normalized === 'plus_monthly' || normalized === 'plus_annual') {
+    return {
+      ...baseAccess,
+      planCode: normalized,
+      planLabel: getPlanLabel(normalized),
+      isPaid: true,
+      isB2B: false,
+      advancedInsights: true,
+      premiumGroups: true,
+      premiumActivities: true,
+      orgDashboard: false,
+      exports: false,
+      multiCampus: false
+    };
+  }
 
   return {
-    planCode: normalized,
-    planLabel: getPlanLabel(normalized),
-    isPaid,
+    ...baseAccess,
+    planCode: 'solo',
+    planLabel: 'Solo',
+    isPaid: false,
     isB2B: false,
+    advancedInsights: false,
+    premiumGroups: false,
+    premiumActivities: false,
     orgDashboard: false,
-    advancedInsights: isPaid,
-    premiumGroups: isPaid,
-    premiumActivities: isPaid,
     exports: false,
-    multiCampus: false,
-    schoolSizeBand: null
+    multiCampus: false
   };
 }
 
-function getSchoolPriceId(planCode) {
+function getPriceIdForPlan(planCode) {
   const normalized = normalizePlanCode(planCode);
 
+  if (normalized === 'plus_monthly') return STRIPE_PRICE_PLUS_MONTHLY;
+  if (normalized === 'plus_annual') return STRIPE_PRICE_PLUS_ANNUAL;
   if (normalized === 'school_starter') return STRIPE_PRICE_SCHOOL_STARTER_YEARLY;
   if (normalized === 'school_pro') return STRIPE_PRICE_SCHOOL_PRO_YEARLY;
 
@@ -383,8 +411,7 @@ function activateSubscriptionRecord(db, payload) {
   db.subscriptions.forEach((item) => {
     if (
       email(item.email) === emailValue &&
-      String(item.status || '').toLowerCase() === 'active' &&
-      normalizePlanCode(item.planCode || item.plan) !== 'solo'
+      String(item.status || '').toLowerCase() === 'active'
     ) {
       item.status = 'replaced';
       item.replacedAt = now;
@@ -394,12 +421,13 @@ function activateSubscriptionRecord(db, payload) {
   const record = {
     id: makeId('sub'),
     email: emailValue,
+    contactName: text(payload.contactName, 80),
+    organization: text(payload.organization, 120),
+    schoolSize: text(payload.schoolSize, 60),
     planCode,
     planLabel: getPlanLabel(planCode),
     status: 'active',
     source: text(payload.source, 40) || 'manual',
-    organization: text(payload.organization, 120),
-    schoolSize: text(payload.schoolSize, 60),
     stripeCustomerId: text(payload.stripeCustomerId, 80),
     stripeSubscriptionId: text(payload.stripeSubscriptionId, 80),
     checkoutSessionId: text(payload.checkoutSessionId, 80),
@@ -718,12 +746,7 @@ function computeInsights(db) {
       name: user.name,
       city: user.city
     })),
-    closedGroups,
-    reportsByCategory: db.reports.reduce((acc, report) => {
-      const category = report.category || 'altro';
-      acc[category] = (acc[category] || 0) + 1;
-      return acc;
-    }, {})
+    closedGroups
   };
 }
 
@@ -783,6 +806,7 @@ app.get('/', (req, res) => {
       '/api/waitlist',
       '/api/partner-leads',
       '/api/billing/status',
+      '/api/billing/plus-checkout',
       '/api/billing/school-checkout',
       '/api/stripe/webhook'
     ]
@@ -828,7 +852,11 @@ app.get('/api/billing/status', (req, res) => {
     return res.json({
       ok: true,
       active: false,
-      subscription: null
+      subscription: {
+        planCode: 'solo',
+        planLabel: 'Solo',
+        entitlements: getPlanEntitlements('solo')
+      }
     });
   }
 
@@ -840,6 +868,66 @@ app.get('/api/billing/status', (req, res) => {
       entitlements: getPlanEntitlements(subscription.planCode)
     }
   });
+});
+
+app.post('/api/billing/plus-checkout', async (req, res) => {
+  if (!stripe) {
+    return res.status(500).json({ error: 'Stripe non configurato sul backend.' });
+  }
+
+  if (!APP_BASE_URL) {
+    return res.status(500).json({ error: 'APP_BASE_URL non configurato sul backend.' });
+  }
+
+  const contactName = text(req.body.contactName || req.body.name, 80);
+  const billingEmail = email(req.body.billingEmail || req.body.email);
+  const planCode = normalizePlanCode(req.body.planCode);
+
+  if (!isValidEmail(billingEmail)) {
+    return res.status(400).json({ error: 'Inserisci una email valida.' });
+  }
+
+  if (!['plus_monthly', 'plus_annual'].includes(planCode)) {
+    return res.status(400).json({ error: 'Piano Plus non valido.' });
+  }
+
+  const priceId = getPriceIdForPlan(planCode);
+
+  if (!priceId) {
+    return res.status(500).json({ error: 'Prezzo Stripe del piano Plus non configurato.' });
+  }
+
+  try {
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      customer_email: billingEmail,
+      billing_address_collection: 'auto',
+      allow_promotion_codes: true,
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: `${APP_BASE_URL}/prezzi?checkout=success&plan=${planCode}`,
+      cancel_url: `${APP_BASE_URL}/prezzi?checkout=cancelled&plan=${planCode}`,
+      metadata: {
+        planCode,
+        billingEmail,
+        contactName
+      },
+      subscription_data: {
+        metadata: {
+          planCode,
+          billingEmail,
+          contactName
+        }
+      }
+    });
+
+    return res.json({
+      ok: true,
+      url: session.url
+    });
+  } catch (error) {
+    console.error('Plus checkout create failed:', error);
+    return res.status(500).json({ error: 'Impossibile creare il checkout Stripe.' });
+  }
 });
 
 app.post('/api/billing/school-checkout', async (req, res) => {
@@ -865,7 +953,7 @@ app.post('/api/billing/school-checkout', async (req, res) => {
     return res.status(400).json({ error: 'Per questa fascia è necessario usare Starter o Pro.' });
   }
 
-  const priceId = getSchoolPriceId(planCode);
+  const priceId = getPriceIdForPlan(planCode);
 
   if (!priceId) {
     return res.status(500).json({ error: 'Prezzo Stripe del piano scuola non configurato.' });
@@ -879,8 +967,8 @@ app.post('/api/billing/school-checkout', async (req, res) => {
       tax_id_collection: { enabled: true },
       allow_promotion_codes: true,
       line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${APP_BASE_URL}/organizzazioni?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${APP_BASE_URL}/organizzazioni?checkout=cancelled`,
+      success_url: `${APP_BASE_URL}/organizzazioni?checkout=success&plan=${planCode}`,
+      cancel_url: `${APP_BASE_URL}/organizzazioni?checkout=cancelled&plan=${planCode}`,
       metadata: {
         planCode,
         organization,
@@ -1243,12 +1331,7 @@ app.post('/api/partner-leads', async (req, res) => {
 
   return res.status(201).json({
     ok: true,
-    message:
-      tier === 'pro'
-        ? 'Richiesta Pro ricevuta. Ti contatteremo per setup avanzato.'
-        : tier === 'starter'
-        ? 'Richiesta Starter ricevuta. Ti contatteremo per setup iniziale.'
-        : 'Richiesta Enterprise ricevuta. Ti contatteremo per proposta personalizzata.'
+    message: 'Richiesta Enterprise ricevuta. Ti contatteremo per proposta personalizzata.'
   });
 });
 
@@ -1268,12 +1351,12 @@ app.listen(PORT, HOST, () => {
   console.log(`Inclusio API in ascolto su http://${HOST}:${PORT}`);
 
   if (!nodemailer) {
-    console.log('Nodemailer non installato: email Gmail disabilitate finché non esegui npm install nodemailer');
+    console.log('Nodemailer non installato: email disabilitate.');
   } else if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
-    console.log('Credenziali Gmail mancanti: email disabilitate finché non imposti GMAIL_USER e GMAIL_APP_PASSWORD');
+    console.log('Credenziali Gmail mancanti: email disabilitate.');
   }
 
   if (!stripe) {
-    console.log('Stripe non configurato: checkout scuola disabilitato finché non imposti STRIPE_SECRET_KEY');
+    console.log('Stripe non configurato: checkout disabilitato finché non imposti STRIPE_SECRET_KEY');
   }
 });
