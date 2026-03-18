@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const express = require('express');
 const path = require('path');
@@ -18,6 +19,9 @@ const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
 const SMTP_PORT = Number(process.env.SMTP_PORT || 465);
 const SMTP_SECURE = String(process.env.SMTP_SECURE || 'true') === 'true';
 const BILLING_ADMIN_TOKEN = process.env.BILLING_ADMIN_TOKEN || '';
+const SESSION_DURATION_DAYS = Math.max(Number(process.env.SESSION_DURATION_DAYS || 30), 1);
+const EMAIL_VERIFY_HOURS = Math.max(Number(process.env.EMAIL_VERIFY_HOURS || 48), 1);
+const PASSWORD_RESET_HOURS = Math.max(Number(process.env.PASSWORD_RESET_HOURS || 2), 1);
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
@@ -48,6 +52,7 @@ app.use((req, res, next) => {
   return next();
 });
 
+
 function baseDbShape() {
   return {
     interests: [],
@@ -58,6 +63,10 @@ function baseDbShape() {
     waitlist: [],
     partnerLeads: [],
     subscriptions: [],
+    organizations: [],
+    sessions: [],
+    emailVerifications: [],
+    passwordResets: [],
     marketing: {
       plans: [],
       faqs: []
@@ -84,6 +93,10 @@ function normalizeDb(raw) {
   db.waitlist = Array.isArray(db.waitlist) ? db.waitlist : [];
   db.partnerLeads = Array.isArray(db.partnerLeads) ? db.partnerLeads : [];
   db.subscriptions = Array.isArray(db.subscriptions) ? db.subscriptions : [];
+  db.organizations = Array.isArray(db.organizations) ? db.organizations : [];
+  db.sessions = Array.isArray(db.sessions) ? db.sessions : [];
+  db.emailVerifications = Array.isArray(db.emailVerifications) ? db.emailVerifications : [];
+  db.passwordResets = Array.isArray(db.passwordResets) ? db.passwordResets : [];
   db.marketing.plans = Array.isArray(db.marketing.plans) ? db.marketing.plans : [];
   db.marketing.faqs = Array.isArray(db.marketing.faqs) ? db.marketing.faqs : [];
 
@@ -107,7 +120,10 @@ function normalizeDb(raw) {
     planCode: normalizePlanCode(user.planCode || user.plan),
     interests: Array.isArray(user.interests) ? user.interests : [],
     goals: Array.isArray(user.goals) ? user.goals : [],
-    joinedGroupIds: Array.isArray(user.joinedGroupIds) ? user.joinedGroupIds : []
+    joinedGroupIds: Array.isArray(user.joinedGroupIds) ? user.joinedGroupIds : [],
+    emailVerified: Boolean(user.emailVerified),
+    passwordHash: String(user.passwordHash || ''),
+    role: text(user.role || 'user', 20) || 'user'
   }));
 
   db.subscriptions = db.subscriptions.map((subscription) => ({
@@ -117,6 +133,38 @@ function normalizeDb(raw) {
     status: text(subscription.status || 'active', 20) || 'active',
     source: text(subscription.source || 'manual', 30) || 'manual'
   }));
+
+  db.sessions = db.sessions
+    .map((session) => ({
+      ...session,
+      token: String(session.token || ''),
+      userId: String(session.userId || ''),
+      createdAt: session.createdAt || new Date().toISOString(),
+      expiresAt: session.expiresAt || new Date(Date.now() + SESSION_DURATION_DAYS * 86400000).toISOString()
+    }))
+    .filter((session) => session.token && session.userId);
+
+  db.emailVerifications = db.emailVerifications
+    .map((item) => ({
+      ...item,
+      token: String(item.token || ''),
+      userId: String(item.userId || ''),
+      email: email(item.email),
+      expiresAt: item.expiresAt || new Date(Date.now() + EMAIL_VERIFY_HOURS * 3600000).toISOString(),
+      createdAt: item.createdAt || new Date().toISOString()
+    }))
+    .filter((item) => item.token && item.userId);
+
+  db.passwordResets = db.passwordResets
+    .map((item) => ({
+      ...item,
+      token: String(item.token || ''),
+      userId: String(item.userId || ''),
+      email: email(item.email),
+      expiresAt: item.expiresAt || new Date(Date.now() + PASSWORD_RESET_HOURS * 3600000).toISOString(),
+      createdAt: item.createdAt || new Date().toISOString()
+    }))
+    .filter((item) => item.token && item.userId);
 
   return db;
 }
@@ -169,6 +217,197 @@ function esc(value) {
 }
 
 
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function addHours(hours) {
+  return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+}
+
+function addDays(days) {
+  return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+}
+
+function randomToken(size = 32) {
+  return crypto.randomBytes(size).toString('hex');
+}
+
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const derivedKey = crypto.scryptSync(String(password), salt, 64).toString('hex');
+  return `${salt}:${derivedKey}`;
+}
+
+function verifyPassword(password, storedHash) {
+  const [salt, expected] = String(storedHash || '').split(':');
+  if (!salt || !expected) return false;
+  const actual = crypto.scryptSync(String(password), salt, 64).toString('hex');
+  return crypto.timingSafeEqual(Buffer.from(actual, 'hex'), Buffer.from(expected, 'hex'));
+}
+
+function getBearerToken(req) {
+  const header = String(req.headers.authorization || '');
+  if (!header.toLowerCase().startsWith('bearer ')) return '';
+  return header.slice(7).trim();
+}
+
+function isExpired(value) {
+  return !value || new Date(value).getTime() <= Date.now();
+}
+
+function purgeExpiredAuthArtifacts(db) {
+  db.sessions = (db.sessions || []).filter((item) => !isExpired(item.expiresAt));
+  db.emailVerifications = (db.emailVerifications || []).filter((item) => !isExpired(item.expiresAt));
+  db.passwordResets = (db.passwordResets || []).filter((item) => !isExpired(item.expiresAt));
+}
+
+function getUserByEmail(db, emailValue) {
+  const normalized = email(emailValue);
+  if (!normalized) return null;
+  return db.users.find((user) => email(user.email) === normalized) || null;
+}
+
+function makePublicUser(user) {
+  if (!user) return null;
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email || '',
+    emailVerified: Boolean(user.emailVerified),
+    city: user.city || 'Online',
+    comfort: user.comfort || 3,
+    energy: user.energy || 3,
+    accessibility: user.accessibility || '',
+    interests: Array.isArray(user.interests) ? user.interests : [],
+    goals: Array.isArray(user.goals) ? user.goals : [],
+    joinedGroupIds: Array.isArray(user.joinedGroupIds) ? user.joinedGroupIds : [],
+    buddyEligible: Boolean(user.buddyEligible),
+    mentor: Boolean(user.mentor),
+    planCode: normalizePlanCode(user.planCode || user.plan),
+    role: user.role || 'user'
+  };
+}
+
+function getSubscriptionPayload(db, user) {
+  const planCode = getUserPlanCode(db, user);
+  const entitlements = getPlanEntitlements(planCode);
+  const activeSubscription = user?.email ? getActiveSubscriptionByEmail(db, user.email) : null;
+
+  return {
+    active: entitlements.isPaid,
+    planCode,
+    planLabel: entitlements.planLabel,
+    entitlements,
+    source: activeSubscription?.source || null,
+    status: activeSubscription?.status || (entitlements.isPaid ? 'active' : 'free')
+  };
+}
+
+function buildOrganizationDashboard(db) {
+  return {
+    stats: {
+      users: db.users.length,
+      groups: db.groups.length,
+      reportsOpen: db.reports.filter((report) => report.status !== 'resolved').length
+    },
+    insights: computeInsights(db)
+  };
+}
+
+function buildAuthPayload(db, user, token = '') {
+  return {
+    token,
+    user: makePublicUser(user),
+    summary: computeUserSummary(db, user.id),
+    subscription: getSubscriptionPayload(db, user),
+    organizationDashboard: getPlanEntitlements(getUserPlanCode(db, user)).orgDashboard ? buildOrganizationDashboard(db) : null
+  };
+}
+
+function getSessionRecord(db, token) {
+  if (!token) return null;
+  purgeExpiredAuthArtifacts(db);
+  return (db.sessions || []).find((session) => session.token === token) || null;
+}
+
+function getAuthUser(db, req) {
+  const token = getBearerToken(req);
+  if (!token) return null;
+  const session = getSessionRecord(db, token);
+  if (!session) return null;
+  return getUserById(db, session.userId);
+}
+
+function requireAuth(db, req, res) {
+  const user = getAuthUser(db, req);
+  if (!user) {
+    res.status(401).json({ error: 'Sessione non valida o scaduta.' });
+    return null;
+  }
+  return user;
+}
+
+function buildVerifyLink(token) {
+  if (!APP_BASE_URL) return '';
+  return `${APP_BASE_URL.replace(/\/$/, '')}/app?verify=${encodeURIComponent(token)}`;
+}
+
+function buildResetLink(token) {
+  if (!APP_BASE_URL) return '';
+  return `${APP_BASE_URL.replace(/\/$/, '')}/app?reset=${encodeURIComponent(token)}`;
+}
+
+async function issueVerificationEmail(db, user) {
+  if (!user?.email) return;
+  db.emailVerifications = (db.emailVerifications || []).filter((item) => item.userId !== user.id);
+  const token = randomToken(24);
+  db.emailVerifications.unshift({
+    token,
+    userId: user.id,
+    email: user.email,
+    createdAt: nowIso(),
+    expiresAt: addHours(EMAIL_VERIFY_HOURS)
+  });
+
+  const verifyLink = buildVerifyLink(token);
+  await safeSendEmail({
+    to: user.email,
+    subject: 'Verifica il tuo account Inclusio',
+    html: `
+      <p>Ciao ${esc(user.name || '')},</p>
+      <p>verifica il tuo indirizzo email per attivare l'area riservata.</p>
+      ${verifyLink ? `<p><a href="${esc(verifyLink)}">Verifica email</a></p>` : `<p>Token: <code>${esc(token)}</code></p>`}
+      <p>Il link scade tra ${EMAIL_VERIFY_HOURS} ore.</p>
+    `
+  });
+}
+
+async function issuePasswordResetEmail(db, user) {
+  if (!user?.email) return;
+  db.passwordResets = (db.passwordResets || []).filter((item) => item.userId !== user.id);
+  const token = randomToken(24);
+  db.passwordResets.unshift({
+    token,
+    userId: user.id,
+    email: user.email,
+    createdAt: nowIso(),
+    expiresAt: addHours(PASSWORD_RESET_HOURS)
+  });
+
+  const resetLink = buildResetLink(token);
+  await safeSendEmail({
+    to: user.email,
+    subject: 'Reset password Inclusio',
+    html: `
+      <p>Ciao ${esc(user.name || '')},</p>
+      <p>usa questo link per impostare una nuova password.</p>
+      ${resetLink ? `<p><a href="${esc(resetLink)}">Reimposta password</a></p>` : `<p>Token: <code>${esc(token)}</code></p>`}
+      <p>Il link scade tra ${PASSWORD_RESET_HOURS} ore.</p>
+    `
+  });
+}
+
 function normalizePlanCode(value) {
   const code = String(value || '').trim().toLowerCase();
 
@@ -201,7 +440,8 @@ function getPlanEntitlements(planCode = 'solo') {
     premiumActivities: isPaid,
     advancedInsights: isPaid,
     priorityIntroductions: isPaid,
-    supportLevel: isPaid ? 'priority' : 'base'
+    supportLevel: isPaid ? 'priority' : 'base',
+    orgDashboard: false
   };
 }
 
@@ -586,9 +826,194 @@ app.get('/api/bootstrap', async (req, res) => {
   });
 });
 
+
+app.post('/api/auth/register', async (req, res) => {
+  const db = await readDb();
+  purgeExpiredAuthArtifacts(db);
+
+  const name = text(req.body.name, 60);
+  const emailValue = email(req.body.email);
+  const password = String(req.body.password || '');
+
+  if (!name) {
+    return res.status(400).json({ error: 'Il nome è obbligatorio.' });
+  }
+
+  if (!isValidEmail(emailValue)) {
+    return res.status(400).json({ error: 'Inserisci un indirizzo email valido.' });
+  }
+
+  if (password.length < 8) {
+    return res.status(400).json({ error: 'La password deve contenere almeno 8 caratteri.' });
+  }
+
+  if (getUserByEmail(db, emailValue)) {
+    return res.status(409).json({ error: 'Esiste già un account con questa email.' });
+  }
+
+  const user = {
+    id: `u-${slugify(name)}-${Math.random().toString(36).slice(2, 6)}`,
+    name,
+    email: emailValue,
+    emailVerified: false,
+    passwordHash: hashPassword(password),
+    planCode: getPlanCodeForEmail(db, emailValue),
+    city: 'Online',
+    interests: [],
+    goals: [],
+    comfort: 3,
+    energy: 3,
+    accessibility: '',
+    joinedGroupIds: [],
+    buddyEligible: true,
+    mentor: false,
+    role: 'user'
+  };
+
+  db.users.push(user);
+  await issueVerificationEmail(db, user);
+  await writeDb(db);
+
+  return res.status(201).json({
+    ok: true,
+    message: 'Account creato. Controlla la tua email per verificare l’indirizzo.'
+  });
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  const db = await readDb();
+  purgeExpiredAuthArtifacts(db);
+
+  const emailValue = email(req.body.email);
+  const password = String(req.body.password || '');
+  const user = getUserByEmail(db, emailValue);
+
+  if (!user || !user.passwordHash || !verifyPassword(password, user.passwordHash)) {
+    return res.status(401).json({ error: 'Email o password non validi.' });
+  }
+
+  const token = randomToken(32);
+  db.sessions.unshift({
+    token,
+    userId: user.id,
+    createdAt: nowIso(),
+    expiresAt: addDays(SESSION_DURATION_DAYS)
+  });
+
+  await writeDb(db);
+  return res.json(buildAuthPayload(db, user, token));
+});
+
+app.get('/api/auth/me', async (req, res) => {
+  const db = await readDb();
+  purgeExpiredAuthArtifacts(db);
+
+  const user = requireAuth(db, req, res);
+  if (!user) return;
+
+  await writeDb(db);
+  return res.json(buildAuthPayload(db, user));
+});
+
+app.post('/api/auth/logout', async (req, res) => {
+  const db = await readDb();
+  const token = getBearerToken(req);
+  db.sessions = (db.sessions || []).filter((item) => item.token !== token);
+  await writeDb(db);
+  return res.json({ ok: true });
+});
+
+app.post('/api/auth/resend-verification', async (req, res) => {
+  const db = await readDb();
+  purgeExpiredAuthArtifacts(db);
+
+  const emailValue = email(req.body.email);
+  const user = getUserByEmail(db, emailValue);
+
+  if (user && !user.emailVerified) {
+    await issueVerificationEmail(db, user);
+    await writeDb(db);
+  }
+
+  return res.json({ ok: true, message: 'Se necessario, abbiamo reinviato la mail di verifica.' });
+});
+
+app.post('/api/auth/verify-email', async (req, res) => {
+  const db = await readDb();
+  purgeExpiredAuthArtifacts(db);
+
+  const token = String(req.body.token || '').trim();
+  const record = (db.emailVerifications || []).find((item) => item.token === token);
+
+  if (!record || isExpired(record.expiresAt)) {
+    return res.status(400).json({ error: 'Token di verifica non valido o scaduto.' });
+  }
+
+  const user = getUserById(db, record.userId);
+  if (!user) {
+    return res.status(404).json({ error: 'Utente non trovato.' });
+  }
+
+  user.emailVerified = true;
+  db.emailVerifications = (db.emailVerifications || []).filter((item) => item.token !== token);
+  await writeDb(db);
+
+  return res.json({ ok: true, message: 'Email verificata. Ora puoi accedere.' });
+});
+
+app.post('/api/auth/forgot-password', async (req, res) => {
+  const db = await readDb();
+  purgeExpiredAuthArtifacts(db);
+
+  const emailValue = email(req.body.email);
+  const user = getUserByEmail(db, emailValue);
+
+  if (user) {
+    await issuePasswordResetEmail(db, user);
+    await writeDb(db);
+  }
+
+  return res.json({
+    ok: true,
+    message: 'Se l’account esiste, abbiamo inviato le istruzioni via email.'
+  });
+});
+
+app.post('/api/auth/reset-password', async (req, res) => {
+  const db = await readDb();
+  purgeExpiredAuthArtifacts(db);
+
+  const token = String(req.body.token || '').trim();
+  const password = String(req.body.password || '');
+  const record = (db.passwordResets || []).find((item) => item.token === token);
+
+  if (!record || isExpired(record.expiresAt)) {
+    return res.status(400).json({ error: 'Token di reset non valido o scaduto.' });
+  }
+
+  if (password.length < 8) {
+    return res.status(400).json({ error: 'La password deve contenere almeno 8 caratteri.' });
+  }
+
+  const user = getUserById(db, record.userId);
+  if (!user) {
+    return res.status(404).json({ error: 'Utente non trovato.' });
+  }
+
+  user.passwordHash = hashPassword(password);
+  db.passwordResets = (db.passwordResets || []).filter((item) => item.token !== token);
+  db.sessions = (db.sessions || []).filter((item) => item.userId !== user.id);
+  await writeDb(db);
+
+  return res.json({ ok: true, message: 'Password aggiornata. Ora puoi accedere.' });
+});
+
+
 app.post('/api/users/onboard', async (req, res) => {
   const db = await readDb();
+  purgeExpiredAuthArtifacts(db);
 
+  const authenticatedUser = getAuthUser(db, req);
   const name = text(req.body.name, 40);
   const emailValue = email(req.body.email);
   const city = text(req.body.city, 40) || 'Online';
@@ -606,6 +1031,26 @@ app.post('/api/users/onboard', async (req, res) => {
     return res.status(400).json({ error: 'Il nome è obbligatorio.' });
   }
 
+  if (authenticatedUser) {
+    authenticatedUser.name = name;
+    authenticatedUser.city = city;
+    authenticatedUser.comfort = comfort;
+    authenticatedUser.energy = energy;
+    authenticatedUser.accessibility = accessibility;
+    authenticatedUser.interests = interests;
+    authenticatedUser.goals = goals;
+    authenticatedUser.planCode = getPlanCodeForEmail(db, authenticatedUser.email);
+    await writeDb(db);
+
+    return res.json({
+      ok: true,
+      message: 'Profilo aggiornato.',
+      user: makePublicUser(authenticatedUser),
+      summary: computeUserSummary(db, authenticatedUser.id),
+      subscription: getSubscriptionPayload(db, authenticatedUser)
+    });
+  }
+
   if (req.body.email && !isValidEmail(emailValue)) {
     return res.status(400).json({ error: 'Inserisci un indirizzo email valido.' });
   }
@@ -618,6 +1063,8 @@ app.post('/api/users/onboard', async (req, res) => {
     id: `u-${slugify(name)}-${Math.random().toString(36).slice(2, 6)}`,
     name,
     email: emailValue,
+    emailVerified: false,
+    passwordHash: '',
     planCode: getPlanCodeForEmail(db, emailValue),
     city,
     interests,
@@ -627,15 +1074,17 @@ app.post('/api/users/onboard', async (req, res) => {
     accessibility,
     joinedGroupIds: [],
     buddyEligible: true,
-    mentor: false
+    mentor: false,
+    role: 'user'
   };
 
   db.users.push(user);
   await writeDb(db);
 
   return res.status(201).json({
-    user,
+    user: makePublicUser(user),
     summary: computeUserSummary(db, user.id),
+    subscription: getSubscriptionPayload(db, user),
     insights: computeInsights(db)
   });
 });
@@ -659,9 +1108,10 @@ app.get('/api/groups', async (req, res) => {
 
 app.post('/api/groups/:groupId/join', async (req, res) => {
   const db = await readDb();
-  const userId = String(req.body.userId || '');
+  const authUser = getAuthUser(db, req);
+  const userId = authUser?.id || String(req.body.userId || '');
   const group = db.groups.find((item) => item.id === req.params.groupId);
-  const user = getUserById(db, userId);
+  const user = authUser || getUserById(db, userId);
 
   if (!group || !user) {
     return res.status(404).json({ error: 'Gruppo o profilo non trovato.' });
@@ -696,9 +1146,10 @@ app.post('/api/groups/:groupId/join', async (req, res) => {
 
 app.post('/api/groups/:groupId/leave', async (req, res) => {
   const db = await readDb();
-  const userId = String(req.body.userId || '');
+  const authUser = getAuthUser(db, req);
+  const userId = authUser?.id || String(req.body.userId || '');
   const group = db.groups.find((item) => item.id === req.params.groupId);
-  const user = getUserById(db, userId);
+  const user = authUser || getUserById(db, userId);
 
   if (!group || !user) {
     return res.status(404).json({ error: 'Gruppo o profilo non trovato.' });
@@ -717,9 +1168,10 @@ app.post('/api/groups/:groupId/leave', async (req, res) => {
 
 app.post('/api/groups/:groupId/activities/:activityId/rsvp', async (req, res) => {
   const db = await readDb();
-  const userId = String(req.body.userId || '');
+  const authUser = getAuthUser(db, req);
+  const userId = authUser?.id || String(req.body.userId || '');
   const group = db.groups.find((item) => item.id === req.params.groupId);
-  const user = getUserById(db, userId);
+  const user = authUser || getUserById(db, userId);
 
   if (!group || !user) {
     return res.status(404).json({ error: 'Gruppo o profilo non trovato.' });
@@ -753,8 +1205,9 @@ app.post('/api/groups/:groupId/activities/:activityId/rsvp', async (req, res) =>
 
 app.post('/api/checkins', async (req, res) => {
   const db = await readDb();
-  const userId = String(req.body.userId || '');
-  const user = getUserById(db, userId);
+  const authUser = getAuthUser(db, req);
+  const userId = authUser?.id || String(req.body.userId || '');
+  const user = authUser || getUserById(db, userId);
 
   if (!user) {
     return res.status(404).json({ error: 'Profilo non trovato.' });
@@ -782,8 +1235,9 @@ app.post('/api/checkins', async (req, res) => {
 
 app.post('/api/reports', async (req, res) => {
   const db = await readDb();
-  const userId = String(req.body.userId || '');
-  const user = getUserById(db, userId);
+  const authUser = getAuthUser(db, req);
+  const userId = authUser?.id || String(req.body.userId || '');
+  const user = authUser || getUserById(db, userId);
 
   if (!user) {
     return res.status(404).json({ error: 'Profilo non trovato.' });
