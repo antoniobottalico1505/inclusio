@@ -553,6 +553,7 @@ function recommendGroups(db, userId) {
       if ((group.members || []).includes(userId)) return false;
       if ((group.members || []).length >= Number(group.sizeLimit || 0)) return false;
       if (group.premiumOnly && !entitlements.premiumGroups) return false;
+      if (group.marketingOnly) return false;
       return true;
     })
     .map((group) => ({
@@ -574,7 +575,7 @@ function recommendBuddies(db, userId, limit = 1) {
   if (!user) return [];
 
   return db.users
-    .filter((candidate) => candidate.id !== userId && candidate.buddyEligible)
+    .filter((candidate) => candidate.id !== userId && candidate.buddyEligible && !candidate.marketingOnly)
     .map((candidate) => {
       const candidateInterests = Array.isArray(candidate.interests) ? candidate.interests : [];
       const sharedInterests = candidateInterests.filter((interest) => (user.interests || []).includes(interest));
@@ -668,25 +669,27 @@ function computeUserSummary(db, userId) {
     reportsOpen: reports.filter((report) => report.status !== 'resolved').length
   };
 
-  const buddyMatches = recommendBuddies(db, userId, entitlements.buddyMatches);
+const buddyMatches = recommendBuddies(db, userId, entitlements.buddyMatches);
 
-  const summary = {
-    user,
-    account: {
-      email: user.email || '',
-      planCode: entitlements.planCode,
-      planLabel: entitlements.planLabel,
-      isPaid: entitlements.isPaid,
-      entitlements
-    },
-    stats,
-    myGroups: myGroups.map((group) => serializeGroup(db, group, userId)),
-    recommendations: recommendGroups(db, userId),
-    buddy: buddyMatches[0] || null,
-    buddyMatches,
-    checkins,
-    reports
-  };
+const summary = {
+  user,
+  account: {
+    email: user.email || '',
+    planCode: entitlements.planCode,
+    planLabel: entitlements.planLabel,
+    isPaid: entitlements.isPaid,
+    entitlements
+  },
+  stats,
+  myGroups: myGroups
+    .filter((group) => !group.marketingOnly)
+    .map((group) => serializeGroup(db, group, userId)),
+  recommendations: recommendGroups(db, userId),
+  buddy: buddyMatches[0] || null,
+  buddyMatches,
+  checkins,
+  reports
+};
 
   const actionPlan = computeActionPlan(summary);
 
@@ -752,11 +755,14 @@ function getMarketing(db) {
       solo: getPlanEntitlements('solo'),
       plus: getPlanEntitlements('plus_monthly')
     },
-    demoUsers: db.users.slice(0, 4).map((user) => ({
-      id: user.id,
-      name: user.name,
-      city: user.city
-    }))
+    demoUsers: db.users
+  .filter((user) => user.marketingOnly)
+  .slice(0, 4)
+  .map((user) => ({
+    id: user.id,
+    name: user.name,
+    city: user.city
+  }))
   };
 }
 

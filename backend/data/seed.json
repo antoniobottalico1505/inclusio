@@ -41,7 +41,8 @@
       "buddyEligible": true,
       "mentor": true,
       "email": "alice@example.com",
-      "planCode": "solo"
+      "planCode": "solo",
+      "marketingOnly": true
     },
     {
       "id": "u-marco",
@@ -66,7 +67,8 @@
       "buddyEligible": true,
       "mentor": true,
       "email": "marco@example.com",
-      "planCode": "plus_monthly"
+      "planCode": "plus_monthly",
+      "marketingOnly": true
     },
     {
       "id": "u-sara",
@@ -91,7 +93,8 @@
       "buddyEligible": true,
       "mentor": false,
       "email": "sara@example.com",
-      "planCode": "plus_annual"
+      "planCode": "plus_annual",
+      "marketingOnly": true
     },
     {
       "id": "u-luca",
@@ -116,7 +119,8 @@
       "buddyEligible": true,
       "mentor": false,
       "email": "luca@example.com",
-      "planCode": "solo"
+      "planCode": "solo",
+      "marketingOnly": true
     }
   ],
   "groups": [
@@ -128,6 +132,7 @@
       "sizeLimit": 8,
       "targetComfort": 2,
       "energy": 2,
+      "marketingOnly": true,
       "tags": [
         "Arte",
         "Fotografia",
@@ -143,7 +148,8 @@
           "when": "Sabato 16:30",
           "mode": "offline",
           "description": "Passeggiata con prompt sociali per facilitare le conversazioni uno-a-uno.",
-          "rsvps": []
+          "rsvps": [],
+          "marketingOnly": true
         },
         {
           "id": "a-two-truths",
@@ -152,7 +158,8 @@
           "mode": "online",
           "description": "Attività breve con immagini e storie personali leggere.",
           "rsvps": [],
-          "premiumOnly": true
+          "premiumOnly": true,
+          "marketingOnly": true
         }
       ]
     },
@@ -163,6 +170,7 @@
       "city": "Milano",
       "sizeLimit": 10,
       "targetComfort": 3,
+      "marketingOnly": true,
       "energy": 4,
       "tags": [
         "Coding",
@@ -181,7 +189,8 @@
           "mode": "online",
           "description": "Sprint collaborativo di 60 minuti con buddy pairing automatico.",
           "rsvps": [],
-          "premiumOnly": true
+          "premiumOnly": true,
+          "marketingOnly": true
         }
       ],
       "premiumOnly": true
@@ -193,6 +202,7 @@
       "city": "Milano",
       "sizeLimit": 6,
       "targetComfort": 1,
+      "marketingOnly": true,
       "energy": 2,
       "tags": [
         "Libri",
@@ -210,7 +220,8 @@
           "when": "Domenica 17:30",
           "mode": "offline",
           "description": "Discussione guidata con domande semplici e turni equi.",
-          "rsvps": []
+          "rsvps": [],
+          "marketingOnly": true
         }
       ]
     },
@@ -221,6 +232,7 @@
       "city": "Milano",
       "sizeLimit": 12,
       "targetComfort": 2,
+      "marketingOnly": true,
       "energy": 3,
       "tags": [
         "Natura",
@@ -235,7 +247,8 @@
           "when": "Mercoledì 18:15",
           "mode": "offline",
           "description": "Attività adatta anche a chi non conosce nessuno del gruppo.",
-          "rsvps": []
+          "rsvps": [],
+          "marketingOnly": true
         }
       ]
     },
@@ -246,6 +259,7 @@
       "city": "Bologna",
       "sizeLimit": 8,
       "targetComfort": 2,
+      "marketingOnly": true,
       "energy": 2,
       "tags": [
         "Viaggi",
@@ -263,7 +277,8 @@
           "when": "Sabato 11:00",
           "mode": "offline",
           "description": "Piccolo giro in zona con coppie di conversazione guidate.",
-          "rsvps": []
+          "rsvps": [],
+          "marketingOnly": true
         }
       ]
     }
