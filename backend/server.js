@@ -563,7 +563,7 @@ app.get('/api/health', (req, res) => {
   res.json({ ok: true, service: 'inclusio-api', now: new Date().toISOString() });
 });
 
-app.get('/api/bootstrap', (req, res) => {
+app.get('/api/bootstrap', async (req, res) => {
   const db = await readDb();
   const userId = req.query.userId ? String(req.query.userId) : null;
   const emailValue = req.query.email ? email(req.query.email) : '';
@@ -586,7 +586,7 @@ app.get('/api/bootstrap', (req, res) => {
   });
 });
 
-app.post('/api/users/onboard', (req, res) => {
+app.post('/api/users/onboard', async (req, res) => {
   const db = await readDb();
 
   const name = text(req.body.name, 40);
@@ -640,7 +640,7 @@ app.post('/api/users/onboard', (req, res) => {
   });
 });
 
-app.get('/api/users/:userId', (req, res) => {
+app.get('/api/users/:userId', async (req, res) => {
   const db = await readDb();
   const summary = computeUserSummary(db, req.params.userId);
 
@@ -651,13 +651,13 @@ app.get('/api/users/:userId', (req, res) => {
   res.json(summary);
 });
 
-app.get('/api/groups', (req, res) => {
+app.get('/api/groups', async (req, res) => {
   const db = await readDb();
   const userId = req.query.userId ? String(req.query.userId) : null;
   res.json(db.groups.map((group) => serializeGroup(db, group, userId)));
 });
 
-app.post('/api/groups/:groupId/join', (req, res) => {
+app.post('/api/groups/:groupId/join', async (req, res) => {
   const db = await readDb();
   const userId = String(req.body.userId || '');
   const group = db.groups.find((item) => item.id === req.params.groupId);
@@ -694,7 +694,7 @@ app.post('/api/groups/:groupId/join', (req, res) => {
   res.json({ summary: computeUserSummary(db, userId), message: 'Ingresso nel gruppo completato.' });
 });
 
-app.post('/api/groups/:groupId/leave', (req, res) => {
+app.post('/api/groups/:groupId/leave', async (req, res) => {
   const db = await readDb();
   const userId = String(req.body.userId || '');
   const group = db.groups.find((item) => item.id === req.params.groupId);
@@ -715,7 +715,7 @@ app.post('/api/groups/:groupId/leave', (req, res) => {
   res.json({ summary: computeUserSummary(db, userId), message: 'Hai lasciato il gruppo.' });
 });
 
-app.post('/api/groups/:groupId/activities/:activityId/rsvp', (req, res) => {
+app.post('/api/groups/:groupId/activities/:activityId/rsvp', async (req, res) => {
   const db = await readDb();
   const userId = String(req.body.userId || '');
   const group = db.groups.find((item) => item.id === req.params.groupId);
@@ -751,7 +751,7 @@ app.post('/api/groups/:groupId/activities/:activityId/rsvp', (req, res) => {
   res.json({ summary: computeUserSummary(db, userId), message: 'Partecipazione aggiornata.' });
 });
 
-app.post('/api/checkins', (req, res) => {
+app.post('/api/checkins', async (req, res) => {
   const db = await readDb();
   const userId = String(req.body.userId || '');
   const user = getUserById(db, userId);
@@ -780,7 +780,7 @@ app.post('/api/checkins', (req, res) => {
   });
 });
 
-app.post('/api/reports', (req, res) => {
+app.post('/api/reports', async (req, res) => {
   const db = await readDb();
   const userId = String(req.body.userId || '');
   const user = getUserById(db, userId);
@@ -946,7 +946,7 @@ app.post('/api/partner-leads', async (req, res) => {
 
 });
 
-app.get('/api/subscriptions/lookup', (req, res) => {
+app.get('/api/subscriptions/lookup', async (req, res) => {
   const db = await readDb();
   const emailValue = email(req.query.email);
 
@@ -1035,9 +1035,11 @@ app.post('/api/subscriptions/activate', async (req, res) => {
   });
 });
 
-app.post('/api/reset', (req, res) => {
-  fs.copyFileSync(SEED_PATH, DB_PATH);
-  res.json({ ok: true, message: 'Ambiente demo ripristinato.' });
+app.post('/api/reset', async (req, res) => {
+  return res.status(410).json({
+    ok: false,
+    error: 'Endpoint demo disattivato: il backend usa Postgres e non supporta più il reset su file.'
+  });
 });
 
 app.get('/favicon.ico', (req, res) => {
