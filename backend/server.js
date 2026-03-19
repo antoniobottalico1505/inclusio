@@ -763,17 +763,6 @@ function computeInsights(db) {
   };
 }
 
-function getMarketing(db) {
-  const demoUsers = db.users
-    .filter((user) => user.marketingOnly)
-    .slice(0, 6)
-    .map((user) => ({
-      id: user.id,
-      name: user.name,
-      city: user.city,
-      interests: Array.isArray(user.interests) ? user.interests : []
-    }));
-
 const DEMO_USER_IDS = new Set([
   'u-alice',
   'u-marco',
@@ -810,6 +799,17 @@ function applyMarketingIsolationMigration(db) {
 
   return changed;
 }
+
+function getMarketing(db) {
+  const demoUsers = db.users
+    .filter((user) => user.marketingOnly)
+    .slice(0, 6)
+    .map((user) => ({
+      id: user.id,
+      name: user.name,
+      city: user.city,
+      interests: Array.isArray(user.interests) ? user.interests : []
+    }));
 
   const demoGroups = db.groups
     .filter((group) => group.marketingOnly)
