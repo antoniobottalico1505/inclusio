@@ -763,6 +763,59 @@ function computeInsights(db) {
   };
 }
 
+function computeMarketingInsights(db) {
+  const demoUsers = db.users.filter((user) => user.marketingOnly);
+  const demoGroups = db.groups.filter((group) => group.marketingOnly);
+  const demoUserIds = new Set(demoUsers.map((user) => user.id));
+
+  const demoCheckins = db.checkins.filter((item) => demoUserIds.has(item.userId));
+  const demoReports = db.reports.filter((item) => demoUserIds.has(item.userId));
+
+  const includedValues = demoCheckins.map((item) => item.included || 0);
+  const anxietyValues = demoCheckins.map((item) => item.anxiety || 0);
+
+  const lonelyUsers = demoUsers.filter((user) => {
+    const userCheckins = demoCheckins
+      .filter((item) => item.userId === user.id)
+      .slice(0, 3);
+
+    if (!userCheckins.length) return false;
+    return avg(userCheckins.map((item) => item.included || 0)) <= 2.5;
+  });
+
+  const closedGroups = demoGroups
+    .map((group) => ({
+      id: group.id,
+      name: group.name,
+      fillRate: Number(
+        (((group.members || []).length / Math.max(Number(group.sizeLimit || 1), 1))).toFixed(2)
+      ),
+      spotsLeft: Math.max(Number(group.sizeLimit || 0) - (group.members || []).length, 0)
+    }))
+    .sort((a, b) => a.spotsLeft - b.spotsLeft);
+
+  return {
+    users: demoUsers.length,
+    groups: demoGroups.length,
+    buddyEligible: demoUsers.filter((user) => user.buddyEligible).length,
+    averageInclusion: Number(avg(includedValues).toFixed(1)),
+    averageAnxiety: Number(avg(anxietyValues).toFixed(1)),
+    openReports: demoReports.filter((report) => report.status !== 'resolved').length,
+    waitlistCount: (db.waitlist || []).length,
+    partnerLeadsCount: (db.partnerLeads || []).length,
+    activeSubscriptions: (db.subscriptions || []).filter(
+      (item) => String(item.status || '').toLowerCase() === 'active'
+    ).length,
+    lonelyUsers: lonelyUsers.map((user) => ({ id: user.id, name: user.name, city: user.city })),
+    closedGroups,
+    reportsByCategory: demoReports.reduce((acc, report) => {
+      const category = report.category || 'altro';
+      acc[category] = (acc[category] || 0) + 1;
+      return acc;
+    }, {})
+  };
+}
+
 const DEMO_USER_IDS = new Set([
   'u-alice',
   'u-marco',
@@ -890,7 +943,7 @@ app.get('/api/bootstrap', async (req, res) => {
     appName: 'Inclusio',
     interests: db.interests,
     summary: userId ? computeUserSummary(db, userId) : null,
-    insights: computeInsights(db),
+    insights: computeMarketingInsights(db),
     marketing: getMarketing(db),
     billingPreview: emailValue
       ? {
