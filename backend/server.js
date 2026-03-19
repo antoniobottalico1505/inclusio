@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const express = require('express');
+const Stripe = require('stripe');
 const path = require('path');
 const fs = require('fs');
 const { ensureStateRow, readDb, writeDb } = require('./db');
@@ -22,6 +23,137 @@ const BILLING_ADMIN_TOKEN = process.env.BILLING_ADMIN_TOKEN || '';
 const SESSION_DURATION_DAYS = Math.max(Number(process.env.SESSION_DURATION_DAYS || 30), 1);
 const EMAIL_VERIFY_HOURS = Math.max(Number(process.env.EMAIL_VERIFY_HOURS || 48), 1);
 const PASSWORD_RESET_HOURS = Math.max(Number(process.env.PASSWORD_RESET_HOURS || 2), 1);
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
+const STRIPE_PRICE_PLUS_MONTHLY = process.env.STRIPE_PRICE_PLUS_MONTHLY || '';
+const STRIPE_PRICE_PLUS_ANNUAL = process.env.STRIPE_PRICE_PLUS_ANNUAL || '';
+
+const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
+
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  if (!stripe || !STRIPE_WEBHOOK_SECRET) {
+    return res.status(503).json({ error: 'Stripe webhook non configurato.' });
+  }
+
+  const signature = req.headers['stripe-signature'];
+
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(req.body, signature, STRIPE_WEBHOOK_SECRET);
+  } catch (error) {
+    console.error('Stripe webhook signature verification failed:', error.message);
+    return res.status(400).send(`Webhook Error: ${error.message}`);
+  }
+
+  try {
+    const db = await readDb();
+
+    switch (event.type) {
+      case 'checkout.session.completed': {
+        const session = event.data.object;
+
+        const emailValue =
+          email(session.customer_details?.email) ||
+          email(session.customer_email) ||
+          email(session.metadata?.email);
+
+        let priceId = '';
+        try {
+          const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { limit: 10 });
+          priceId = lineItems?.data?.[0]?.price?.id || '';
+        } catch (error) {
+          console.error('Stripe line items fetch failed:', error.message);
+        }
+
+        const planCode = resolveStripePlanCode(session.metadata?.planCode, priceId);
+
+        if (emailValue && planCode !== 'solo') {
+          upsertSubscriptionForEmail(db, {
+            emailValue,
+            planCode,
+            source: 'stripe_checkout',
+            stripeCustomerId: String(session.customer || ''),
+            stripeSubscriptionId: String(session.subscription || ''),
+            stripePriceId: priceId,
+            stripeCheckoutSessionId: String(session.id || '')
+          });
+          await writeDb(db);
+        }
+
+        break;
+      }
+
+      case 'invoice.paid': {
+        const invoice = event.data.object;
+
+        let expandedInvoice = invoice;
+        try {
+          expandedInvoice = await stripe.invoices.retrieve(invoice.id, {
+            expand: ['lines.data.price']
+          });
+        } catch (error) {
+          console.error('Stripe invoice retrieve failed:', error.message);
+        }
+
+        const emailValue =
+          email(expandedInvoice.customer_email) ||
+          email(expandedInvoice.metadata?.email) ||
+          await getStripeCustomerEmail(String(expandedInvoice.customer || ''));
+
+        const priceId = expandedInvoice?.lines?.data?.[0]?.price?.id || '';
+        const planCode = resolveStripePlanCode(expandedInvoice.metadata?.planCode, priceId);
+
+        if (emailValue && planCode !== 'solo') {
+          upsertSubscriptionForEmail(db, {
+            emailValue,
+            planCode,
+            source: 'stripe_invoice_paid',
+            stripeCustomerId: String(expandedInvoice.customer || ''),
+            stripeSubscriptionId: String(expandedInvoice.subscription || ''),
+            stripePriceId: priceId,
+            stripeInvoiceId: String(expandedInvoice.id || '')
+          });
+          await writeDb(db);
+        }
+
+        break;
+      }
+
+      case 'customer.subscription.deleted': {
+        const subscription = event.data.object;
+
+        let expandedSubscription = subscription;
+        try {
+          expandedSubscription = await stripe.subscriptions.retrieve(subscription.id, {
+            expand: ['items.data.price']
+          });
+        } catch (error) {
+          console.error('Stripe subscription retrieve failed:', error.message);
+        }
+
+        const emailValue =
+          email(expandedSubscription.metadata?.email) ||
+          await getStripeCustomerEmail(String(expandedSubscription.customer || ''));
+
+        cancelSubscriptionsForEmail(db, {
+          emailValue,
+          stripeSubscriptionId: String(expandedSubscription.id || '')
+        });
+        await writeDb(db);
+
+        break;
+      }
+
+      default:
+        break;
+    }
+
+    return res.json({ received: true });
+  } catch (error) {
+    console.error('Stripe webhook handling failed:', error);
+    return res.status(500).json({ error: 'Webhook handling failed.' });
+  }
+});
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
@@ -461,6 +593,154 @@ function getActiveSubscriptionByEmail(db, emailValue) {
 function getPlanCodeForEmail(db, emailValue) {
   const activeSubscription = getActiveSubscriptionByEmail(db, emailValue);
   return activeSubscription ? normalizePlanCode(activeSubscription.planCode || activeSubscription.plan) : 'solo';
+}
+
+function resolveStripePlanCode(metadataPlanCode = '', priceId = '') {
+  const normalizedMetadataPlan = normalizePlanCode(metadataPlanCode);
+
+  if (normalizedMetadataPlan !== 'solo') {
+    return normalizedMetadataPlan;
+  }
+
+  if (priceId && STRIPE_PRICE_PLUS_MONTHLY && priceId === STRIPE_PRICE_PLUS_MONTHLY) {
+    return 'plus_monthly';
+  }
+
+  if (priceId && STRIPE_PRICE_PLUS_ANNUAL && priceId === STRIPE_PRICE_PLUS_ANNUAL) {
+    return 'plus_annual';
+  }
+
+  return 'solo';
+}
+
+async function getStripeCustomerEmail(customerId = '') {
+  if (!stripe || !customerId) return '';
+
+  try {
+    const customer = await stripe.customers.retrieve(customerId);
+    return email(customer?.email);
+  } catch (error) {
+    console.error('Stripe customer retrieve failed:', error.message);
+    return '';
+  }
+}
+
+function upsertSubscriptionForEmail(
+  db,
+  {
+    emailValue,
+    planCode,
+    source = 'stripe_webhook',
+    stripeCustomerId = '',
+    stripeSubscriptionId = '',
+    stripePriceId = '',
+    stripeCheckoutSessionId = '',
+    stripeInvoiceId = ''
+  }
+) {
+  const normalizedEmail = email(emailValue);
+  const normalizedPlanCode = normalizePlanCode(planCode);
+  const now = new Date().toISOString();
+
+  if (!normalizedEmail || normalizedPlanCode === 'solo') {
+    return null;
+  }
+
+  const existingByStripeSubscription = stripeSubscriptionId
+    ? (db.subscriptions || []).find(
+        (subscription) =>
+          email(subscription.email) === normalizedEmail &&
+          String(subscription.stripeSubscriptionId || '') === String(stripeSubscriptionId)
+      ) || null
+    : null;
+
+  if (existingByStripeSubscription) {
+    existingByStripeSubscription.planCode = normalizedPlanCode;
+    existingByStripeSubscription.status = 'active';
+    existingByStripeSubscription.source = source;
+    existingByStripeSubscription.updatedAt = now;
+    existingByStripeSubscription.stripeCustomerId = stripeCustomerId || existingByStripeSubscription.stripeCustomerId || '';
+    existingByStripeSubscription.stripeSubscriptionId =
+      stripeSubscriptionId || existingByStripeSubscription.stripeSubscriptionId || '';
+    existingByStripeSubscription.stripePriceId = stripePriceId || existingByStripeSubscription.stripePriceId || '';
+    existingByStripeSubscription.stripeCheckoutSessionId =
+      stripeCheckoutSessionId || existingByStripeSubscription.stripeCheckoutSessionId || '';
+    existingByStripeSubscription.stripeInvoiceId =
+      stripeInvoiceId || existingByStripeSubscription.stripeInvoiceId || '';
+
+    const existingUser = db.users.find((item) => email(item.email) === normalizedEmail);
+    if (existingUser) {
+      existingUser.planCode = normalizedPlanCode;
+    }
+
+    return existingByStripeSubscription;
+  }
+
+  db.subscriptions = (db.subscriptions || []).map((subscription) =>
+    email(subscription.email) === normalizedEmail &&
+    String(subscription.status || '').toLowerCase() === 'active'
+      ? { ...subscription, status: 'replaced', replacedAt: now }
+      : subscription
+  );
+
+  const subscription = {
+    id: makeId('sub'),
+    email: normalizedEmail,
+    planCode: normalizedPlanCode,
+    status: 'active',
+    source,
+    createdAt: now,
+    activatedAt: now,
+    updatedAt: now,
+    stripeCustomerId,
+    stripeSubscriptionId,
+    stripePriceId,
+    stripeCheckoutSessionId,
+    stripeInvoiceId
+  };
+
+  db.subscriptions.unshift(subscription);
+
+  const existingUser = db.users.find((item) => email(item.email) === normalizedEmail);
+  if (existingUser) {
+    existingUser.planCode = normalizedPlanCode;
+  }
+
+  return subscription;
+}
+
+function cancelSubscriptionsForEmail(db, { emailValue = '', stripeSubscriptionId = '' }) {
+  const normalizedEmail = email(emailValue);
+  const now = new Date().toISOString();
+  let changed = false;
+
+  db.subscriptions = (db.subscriptions || []).map((subscription) => {
+    const emailMatches = normalizedEmail && email(subscription.email) === normalizedEmail;
+    const stripeSubscriptionMatches =
+      stripeSubscriptionId &&
+      String(subscription.stripeSubscriptionId || '') === String(stripeSubscriptionId);
+
+    if ((emailMatches || stripeSubscriptionMatches) && String(subscription.status || '').toLowerCase() === 'active') {
+      changed = true;
+      return {
+        ...subscription,
+        status: 'canceled',
+        canceledAt: now,
+        updatedAt: now
+      };
+    }
+
+    return subscription;
+  });
+
+  if (changed && normalizedEmail) {
+    const existingUser = db.users.find((item) => email(item.email) === normalizedEmail);
+    if (existingUser) {
+      existingUser.planCode = getPlanCodeForEmail(db, normalizedEmail);
+    }
+  }
+
+  return changed;
 }
 
 function getUserPlanCode(db, user) {
@@ -1588,52 +1868,33 @@ app.post('/api/subscriptions/activate', async (req, res) => {
     return res.status(400).json({ error: 'Attiva un piano Plus valido.' });
   }
 
-  const now = new Date().toISOString();
+const subscription = upsertSubscriptionForEmail(db, {
+  emailValue,
+  planCode,
+  source
+});
 
-  db.subscriptions = (db.subscriptions || []).map((subscription) =>
-    email(subscription.email) === emailValue && String(subscription.status || '').toLowerCase() === 'active'
-      ? { ...subscription, status: 'replaced', replacedAt: now }
-      : subscription
-  );
+await writeDb(db);
 
-  const subscription = {
-    id: makeId('sub'),
-    email: emailValue,
-    planCode,
-    status: 'active',
-    source,
-    createdAt: now,
-    activatedAt: now
-  };
+await safeSendEmail({
+  to: emailValue,
+  subject: `Inclusio — ${getPlanLabel(planCode)} attivato`,
+  html: `
+    <h2>Piano attivato</h2>
+    <p>Il tuo piano <strong>${getPlanLabel(planCode)}</strong> è ora attivo.</p>
+    <p>Da questo momento hai accesso ai servizi extra previsti dal piano.</p>
+    <p><a href="${APP_BASE_URL}">Vai al sito</a></p>
+  `
+});
 
-  db.subscriptions.unshift(subscription);
-
-  const existingUser = db.users.find((item) => item.email === emailValue);
-  if (existingUser) {
-    existingUser.planCode = planCode;
-  }
-
-  await writeDb(db);
-
-  await safeSendEmail({
-    to: emailValue,
-    subject: `Inclusio — ${getPlanLabel(planCode)} attivato`,
-    html: `
-      <h2>Piano attivato</h2>
-      <p>Il tuo piano <strong>${getPlanLabel(planCode)}</strong> è ora attivo.</p>
-      <p>Da questo momento hai accesso ai servizi extra previsti dal piano.</p>
-      <p><a href="${APP_BASE_URL}">Vai al sito</a></p>
-    `
-  });
-
-  return res.status(201).json({
-    ok: true,
-    email: emailValue,
-    planCode,
-    planLabel: getPlanLabel(planCode),
-    entitlements: getPlanEntitlements(planCode),
-    subscription
-  });
+return res.status(201).json({
+  ok: true,
+  email: emailValue,
+  planCode,
+  planLabel: getPlanLabel(planCode),
+  entitlements: getPlanEntitlements(planCode),
+  subscription
+});
 });
 
 app.post('/api/reset', async (req, res) => {
