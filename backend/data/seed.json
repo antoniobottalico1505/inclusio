@@ -18,271 +18,265 @@
     "Viaggi"
   ],
   "users": [
-    {
-      "id": "u-alice",
-      "name": "Alice",
-      "city": "Milano",
-      "interests": [
-        "Design",
-        "Arte",
-        "Fotografia",
-        "Libri"
-      ],
-      "goals": [
-        "fare_amicizia",
-        "trovare_gruppo"
-      ],
-      "comfort": 2,
-      "energy": 3,
-      "accessibility": "Preferisce gruppi piccoli, conversazioni tranquille e attività con facilitatore.",
-      "joinedGroupIds": [
-        "g-creative-circle"
-      ],
-      "buddyEligible": true,
-      "mentor": true,
-      "email": "alice@example.com",
-      "planCode": "solo",
-      "marketingOnly": true
-    },
-    {
-      "id": "u-marco",
-      "name": "Marco",
-      "city": "Milano",
-      "interests": [
-        "Coding",
-        "Gaming",
-        "Startup",
-        "Tecnologia"
-      ],
-      "goals": [
-        "costruire_team",
-        "fare_amicizia"
-      ],
-      "comfort": 3,
-      "energy": 4,
-      "accessibility": "Apprezza attività strutturate e pairing chiari.",
-      "joinedGroupIds": [
-        "g-build-club"
-      ],
-      "buddyEligible": true,
-      "mentor": true,
-      "email": "marco@example.com",
-      "planCode": "plus_monthly",
-      "marketingOnly": true
-    },
-    {
-      "id": "u-sara",
-      "name": "Sara",
-      "city": "Milano",
-      "interests": [
-        "Musica",
-        "Lingue",
-        "Viaggi",
-        "Cinema"
-      ],
-      "goals": [
-        "uscire_di_piu",
-        "fare_amicizia"
-      ],
-      "comfort": 4,
-      "energy": 4,
-      "accessibility": "Si trova bene in attività miste online/offline e gruppi molto chiari nelle regole.",
-      "joinedGroupIds": [
-        "g-slow-social"
-      ],
-      "buddyEligible": true,
-      "mentor": false,
-      "email": "sara@example.com",
-      "planCode": "plus_annual",
-      "marketingOnly": true
-    },
-    {
-      "id": "u-luca",
-      "name": "Luca",
-      "city": "Bologna",
-      "interests": [
-        "Libri",
-        "Podcast",
-        "Viaggi",
-        "Natura"
-      ],
-      "goals": [
-        "trovare_gruppo",
-        "uscire_di_piu"
-      ],
-      "comfort": 2,
-      "energy": 2,
-      "accessibility": "Preferisce tempi lenti, incontri brevi e introduzioni uno-a-uno.",
-      "joinedGroupIds": [
-        "g-new-city-club"
-      ],
-      "buddyEligible": true,
-      "mentor": false,
-      "email": "luca@example.com",
-      "planCode": "solo",
-      "marketingOnly": true
-    }
-  ],
+  {
+    "id": "u-alice",
+    "name": "Alice",
+    "city": "Milano",
+    "interests": [
+      "Design",
+      "Arte",
+      "Fotografia",
+      "Libri"
+    ],
+    "goals": [
+      "fare_amicizia",
+      "trovare_gruppo"
+    ],
+    "comfort": 2,
+    "energy": 3,
+    "accessibility": "Preferisce gruppi piccoli, conversazioni tranquille e attività con facilitatore.",
+    "joinedGroupIds": [
+      "g-creative-circle"
+    ],
+    "buddyEligible": true,
+    "mentor": true,
+    "email": "alice@example.com",
+    "planCode": "solo",
+    "marketingOnly": true
+  },
+  {
+    "id": "u-marco",
+    "name": "Marco",
+    "city": "Milano",
+    "interests": [
+      "Coding",
+      "Gaming",
+      "Startup",
+      "Tecnologia"
+    ],
+    "goals": [
+      "costruire_team",
+      "fare_amicizia"
+    ],
+    "comfort": 3,
+    "energy": 4,
+    "accessibility": "Apprezza attività strutturate e pairing chiari.",
+    "joinedGroupIds": [
+      "g-build-club"
+    ],
+    "buddyEligible": true,
+    "mentor": true,
+    "email": "marco@example.com",
+    "planCode": "plus_monthly",
+    "marketingOnly": true
+  },
+  {
+    "id": "u-sara",
+    "name": "Sara",
+    "city": "Milano",
+    "interests": [
+      "Musica",
+      "Lingue",
+      "Viaggi",
+      "Cinema"
+    ],
+    "goals": [
+      "uscire_di_piu",
+      "fare_amicizia"
+    ],
+    "comfort": 4,
+    "energy": 4,
+    "accessibility": "Si trova bene in attività miste online/offline e gruppi molto chiari nelle regole.",
+    "joinedGroupIds": [
+      "g-slow-social"
+    ],
+    "buddyEligible": true,
+    "mentor": false,
+    "email": "sara@example.com",
+    "planCode": "plus_annual",
+    "marketingOnly": true
+  },
+  {
+    "id": "u-luca",
+    "name": "Luca",
+    "city": "Bologna",
+    "interests": [
+      "Libri",
+      "Podcast",
+      "Viaggi",
+      "Natura"
+    ],
+    "goals": [
+      "trovare_gruppo",
+      "uscire_di_piu"
+    ],
+    "comfort": 2,
+    "energy": 2,
+    "accessibility": "Preferisce tempi lenti, incontri brevi e introduzioni uno-a-uno.",
+    "joinedGroupIds": [
+      "g-new-city-club"
+    ],
+    "buddyEligible": true,
+    "mentor": false,
+    "email": "luca@example.com",
+    "planCode": "solo",
+    "marketingOnly": true
+  }
+],
   "groups": [
-    {
-      "id": "g-creative-circle",
-      "name": "Creative Circle",
-      "description": "Micro-gruppo per chi vuole rompere il ghiaccio con arte, foto e conversazioni guidate.",
-      "city": "Milano",
-      "sizeLimit": 8,
-      "targetComfort": 2,
-      "energy": 2,
-      "marketingOnly": true,
-      "tags": [
-        "Arte",
-        "Fotografia",
-        "Design"
-      ],
-      "members": [
-        "u-alice"
-      ],
-      "activities": [
-        {
-          "id": "a-photo-walk",
-          "title": "Photo Walk guidata",
-          "when": "Sabato 16:30",
-          "mode": "offline",
-          "description": "Passeggiata con prompt sociali per facilitare le conversazioni uno-a-uno.",
-          "rsvps": [],
-          "marketingOnly": true
-        },
-        {
-          "id": "a-two-truths",
-          "title": "Icebreaker visivo",
-          "when": "Martedì 19:00",
-          "mode": "online",
-          "description": "Attività breve con immagini e storie personali leggere.",
-          "rsvps": [],
-          "premiumOnly": true,
-          "marketingOnly": true
-        }
-      ]
-    },
-    {
-      "id": "g-build-club",
-      "name": "Build Club",
-      "description": "Gruppo per creare mini progetti con coding, design e pair-building guidato.",
-      "city": "Milano",
-      "sizeLimit": 10,
-      "targetComfort": 3,
-      "marketingOnly": true,
-      "energy": 4,
-      "tags": [
-        "Coding",
-        "Startup",
-        "Tecnologia",
-        "Design"
-      ],
-      "members": [
-        "u-marco"
-      ],
-      "activities": [
-        {
-          "id": "a-ship-night",
-          "title": "Ship Night",
-          "when": "Giovedì 20:00",
-          "mode": "online",
-          "description": "Sprint collaborativo di 60 minuti con buddy pairing automatico.",
-          "rsvps": [],
-          "premiumOnly": true,
-          "marketingOnly": true
-        }
-      ],
-      "premiumOnly": true
-    },
-    {
-      "id": "g-slow-social",
-      "name": "Slow Social",
-      "description": "Per chi vuole conoscere persone senza pressione: ritmi lenti, gruppi piccoli, temi semplici.",
-      "city": "Milano",
-      "sizeLimit": 6,
-      "targetComfort": 1,
-      "marketingOnly": true,
-      "energy": 2,
-      "tags": [
-        "Libri",
-        "Cinema",
-        "Musica",
-        "Lingue"
-      ],
-      "members": [
-        "u-sara"
-      ],
-      "activities": [
-        {
-          "id": "a-cinema-cafe",
-          "title": "Cinema + caffè",
-          "when": "Domenica 17:30",
-          "mode": "offline",
-          "description": "Discussione guidata con domande semplici e turni equi.",
-          "rsvps": [],
-          "marketingOnly": true
-        }
-      ]
-    },
-    {
-      "id": "g-move-together",
-      "name": "Move Together",
-      "description": "Camminate leggere e attività fisica inclusiva, senza competitività.",
-      "city": "Milano",
-      "sizeLimit": 12,
-      "targetComfort": 2,
-      "marketingOnly": true,
-      "energy": 3,
-      "tags": [
-        "Natura",
-        "Sport",
-        "Volontariato"
-      ],
-      "members": [],
-      "activities": [
-        {
-          "id": "a-park-loop",
-          "title": "Passeggiata in parco",
-          "when": "Mercoledì 18:15",
-          "mode": "offline",
-          "description": "Attività adatta anche a chi non conosce nessuno del gruppo.",
-          "rsvps": [],
-          "marketingOnly": true
-        }
-      ]
-    },
-    {
-      "id": "g-new-city-club",
-      "name": "New City Club",
-      "description": "Spazio per chi si sente nuovo in città e vuole creare un primo giro di persone affidabili.",
-      "city": "Bologna",
-      "sizeLimit": 8,
-      "targetComfort": 2,
-      "marketingOnly": true,
-      "energy": 2,
-      "tags": [
-        "Viaggi",
-        "Podcast",
-        "Libri",
-        "Natura"
-      ],
-      "members": [
-        "u-luca"
-      ],
-      "activities": [
-        {
-          "id": "a-city-intro",
-          "title": "Tour soft del quartiere",
-          "when": "Sabato 11:00",
-          "mode": "offline",
-          "description": "Piccolo giro in zona con coppie di conversazione guidate.",
-          "rsvps": [],
-          "marketingOnly": true
-        }
-      ]
-    }
-  ],
+  {
+    "id": "g-creative-circle",
+    "name": "Creative Circle",
+    "description": "Micro-gruppo per chi vuole rompere il ghiaccio con arte, foto e conversazioni guidate.",
+    "city": "Milano",
+    "sizeLimit": 8,
+    "targetComfort": 2,
+    "energy": 2,
+    "marketingOnly": true,
+    "tags": [
+      "Arte",
+      "Fotografia",
+      "Design"
+    ],
+    "members": [
+      "u-alice"
+    ],
+    "activities": [
+      {
+        "id": "a-photo-walk",
+        "title": "Photo Walk guidata",
+        "when": "Sabato 16:30",
+        "mode": "offline",
+        "description": "Passeggiata con prompt sociali per facilitare le conversazioni uno-a-uno.",
+        "rsvps": []
+      },
+      {
+        "id": "a-two-truths",
+        "title": "Icebreaker visivo",
+        "when": "Martedì 19:00",
+        "mode": "online",
+        "description": "Attività breve con immagini e storie personali leggere.",
+        "rsvps": [],
+        "premiumOnly": true
+      }
+    ]
+  },
+  {
+    "id": "g-build-club",
+    "name": "Build Club",
+    "description": "Gruppo per creare mini progetti con coding, design e pair-building guidato.",
+    "city": "Milano",
+    "sizeLimit": 10,
+    "targetComfort": 3,
+    "energy": 4,
+    "marketingOnly": true,
+    "tags": [
+      "Coding",
+      "Startup",
+      "Tecnologia",
+      "Design"
+    ],
+    "members": [
+      "u-marco"
+    ],
+    "activities": [
+      {
+        "id": "a-ship-night",
+        "title": "Ship Night",
+        "when": "Giovedì 20:00",
+        "mode": "online",
+        "description": "Sprint collaborativo di 60 minuti con buddy pairing automatico.",
+        "rsvps": [],
+        "premiumOnly": true
+      }
+    ],
+    "premiumOnly": true
+  },
+  {
+    "id": "g-slow-social",
+    "name": "Slow Social",
+    "description": "Per chi vuole conoscere persone senza pressione: ritmi lenti, gruppi piccoli, temi semplici.",
+    "city": "Milano",
+    "sizeLimit": 6,
+    "targetComfort": 1,
+    "energy": 2,
+    "marketingOnly": true,
+    "tags": [
+      "Libri",
+      "Cinema",
+      "Musica",
+      "Lingue"
+    ],
+    "members": [
+      "u-sara"
+    ],
+    "activities": [
+      {
+        "id": "a-cinema-cafe",
+        "title": "Cinema + caffè",
+        "when": "Domenica 17:30",
+        "mode": "offline",
+        "description": "Discussione guidata con domande semplici e turni equi.",
+        "rsvps": []
+      }
+    ]
+  },
+  {
+    "id": "g-move-together",
+    "name": "Move Together",
+    "description": "Camminate leggere e attività fisica inclusiva, senza competitività.",
+    "city": "Milano",
+    "sizeLimit": 12,
+    "targetComfort": 2,
+    "energy": 3,
+    "marketingOnly": true,
+    "tags": [
+      "Natura",
+      "Sport",
+      "Volontariato"
+    ],
+    "members": [],
+    "activities": [
+      {
+        "id": "a-park-loop",
+        "title": "Passeggiata in parco",
+        "when": "Mercoledì 18:15",
+        "mode": "offline",
+        "description": "Attività adatta anche a chi non conosce nessuno del gruppo.",
+        "rsvps": []
+      }
+    ]
+  },
+  {
+    "id": "g-new-city-club",
+    "name": "New City Club",
+    "description": "Spazio per chi si sente nuovo in città e vuole creare un primo giro di persone affidabili.",
+    "city": "Bologna",
+    "sizeLimit": 8,
+    "targetComfort": 2,
+    "energy": 2,
+    "marketingOnly": true,
+    "tags": [
+      "Viaggi",
+      "Podcast",
+      "Libri",
+      "Natura"
+    ],
+    "members": [
+      "u-luca"
+    ],
+    "activities": [
+      {
+        "id": "a-city-intro",
+        "title": "Tour soft del quartiere",
+        "when": "Sabato 11:00",
+        "mode": "offline",
+        "description": "Piccolo giro in zona con coppie di conversazione guidate.",
+        "rsvps": []
+      }
+    ]
+  }
+],
   "checkins": [
     {
       "id": "c-1",
@@ -363,6 +357,11 @@
       "tierLabel": "School Starter"
     }
   ],
+  "subscriptions": [],
+  "organizations": [],
+  "sessions": [],
+  "emailVerifications": [],
+  "passwordResets": [],
   "marketing": {
     "plans": [
       {
@@ -473,25 +472,5 @@
         "a": "Solo consente un uso base con un solo gruppo attivo e un solo buddy suggerito. Plus sblocca gruppi premium, fino a tre gruppi attivi, fino a tre buddy match e insight avanzati."
       }
     ]
-  },
-  "subscriptions": [
-    {
-      "id": "sub-demo-1",
-      "email": "marco@example.com",
-      "planCode": "plus_monthly",
-      "status": "active",
-      "source": "seed",
-      "createdAt": "2026-03-14T09:30:00.000Z",
-      "activatedAt": "2026-03-14T09:30:00.000Z"
-    },
-    {
-      "id": "sub-demo-2",
-      "email": "sara@example.com",
-      "planCode": "plus_annual",
-      "status": "active",
-      "source": "seed",
-      "createdAt": "2026-03-14T09:45:00.000Z",
-      "activatedAt": "2026-03-14T09:45:00.000Z"
-    }
-  ]
+  }
 }

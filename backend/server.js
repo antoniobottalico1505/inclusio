@@ -544,26 +544,35 @@ function scoreGroupForUser(group, user) {
 
 function recommendGroups(db, userId) {
   const user = getUserById(db, userId);
+
   if (!user) return [];
 
   const entitlements = getUserEntitlements(db, user);
 
   return db.groups
     .filter((group) => {
+      if (group.marketingOnly) return false;
       if ((group.members || []).includes(userId)) return false;
       if ((group.members || []).length >= Number(group.sizeLimit || 0)) return false;
       if (group.premiumOnly && !entitlements.premiumGroups) return false;
-      if (group.marketingOnly) return false;
       return true;
     })
     .map((group) => ({
       ...serializeGroup(db, group, userId),
       matchScore: scoreGroupForUser(group, user),
       matchReasons: unique([
-        (group.tags || []).some((tag) => (user.interests || []).includes(tag)) ? 'Interessi in comune' : null,
-        Math.abs((group.targetComfort || 3) - (user.comfort || 3)) <= 1 ? 'Comfort compatibile' : null,
-        Math.abs((group.energy || 3) - (user.energy || 3)) <= 1 ? 'Ritmo sociale adatto' : null,
-        (group.members || []).length <= Math.max(2, Math.floor(Number(group.sizeLimit || 0) / 2)) ? 'Gruppo aperto a nuovi ingressi' : null
+        (group.tags || []).some((tag) => (user.interests || []).includes(tag))
+          ? 'Interessi in comune'
+          : null,
+        Math.abs((group.targetComfort || 3) - (user.comfort || 3)) <= 1
+          ? 'Comfort compatibile'
+          : null,
+        Math.abs((group.energy || 3) - (user.energy || 3)) <= 1
+          ? 'Ritmo sociale adatto'
+          : null,
+        (group.members || []).length <= Math.max(2, Math.floor(Number(group.sizeLimit || 0) / 2))
+          ? 'Gruppo aperto a nuovi ingressi'
+          : null
       ])
     }))
     .sort((a, b) => b.matchScore - a.matchScore)
@@ -575,7 +584,12 @@ function recommendBuddies(db, userId, limit = 1) {
   if (!user) return [];
 
   return db.users
-    .filter((candidate) => candidate.id !== userId && candidate.buddyEligible && !candidate.marketingOnly)
+    .filter(
+  (candidate) =>
+    candidate.id !== userId &&
+    candidate.buddyEligible &&
+    !candidate.marketingOnly
+)
     .map((candidate) => {
       const candidateInterests = Array.isArray(candidate.interests) ? candidate.interests : [];
       const sharedInterests = candidateInterests.filter((interest) => (user.interests || []).includes(interest));
@@ -635,7 +649,9 @@ function computeUserSummary(db, userId) {
   if (!user) return null;
 
   const entitlements = getUserEntitlements(db, user);
-  const myGroups = db.groups.filter((group) => (group.members || []).includes(userId));
+  const myGroups = db.groups.filter(
+  (group) => (group.members || []).includes(userId) && !group.marketingOnly
+);
   const checkins = getUserCheckins(db, userId);
   const recentCheckins = checkins.slice(0, 5);
   const reports = getUserReports(db, userId).map((report) => ({
@@ -748,6 +764,30 @@ function computeInsights(db) {
 }
 
 function getMarketing(db) {
+  const demoUsers = db.users
+    .filter((user) => user.marketingOnly)
+    .slice(0, 6)
+    .map((user) => ({
+      id: user.id,
+      name: user.name,
+      city: user.city,
+      interests: Array.isArray(user.interests) ? user.interests : []
+    }));
+
+  const demoGroups = db.groups
+    .filter((group) => group.marketingOnly)
+    .slice(0, 6)
+    .map((group) => ({
+      id: group.id,
+      name: group.name,
+      description: group.description || '',
+      city: group.city || 'Online',
+      tags: Array.isArray(group.tags) ? group.tags : [],
+      premiumOnly: Boolean(group.premiumOnly),
+      memberCount: (group.members || []).length,
+      sizeLimit: Number(group.sizeLimit || 0)
+    }));
+
   return {
     plans: db.marketing?.plans || [],
     faqs: db.marketing?.faqs || [],
@@ -755,14 +795,8 @@ function getMarketing(db) {
       solo: getPlanEntitlements('solo'),
       plus: getPlanEntitlements('plus_monthly')
     },
-    demoUsers: db.users
-  .filter((user) => user.marketingOnly)
-  .slice(0, 4)
-  .map((user) => ({
-    id: user.id,
-    name: user.name,
-    city: user.city
-  }))
+    demoUsers,
+    demoGroups
   };
 }
 

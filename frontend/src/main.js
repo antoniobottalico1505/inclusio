@@ -327,6 +327,34 @@ function renderDemoUsers(marketing) {
     .join('');
 }
 
+function renderDemoGroups(marketing) {
+  const grid = $('#demo-groups');
+
+  if (!grid || !marketing) return;
+
+  const groups = marketing.demoGroups || [];
+
+  if (!groups.length) {
+    grid.innerHTML = emptyCard('Nessun gruppo demo visibile al momento.');
+    return;
+  }
+
+  grid.innerHTML = groups
+    .map(
+      (group) => `
+      <article class="card" style="display:grid; gap:10px;">
+        <div class="kicker">${group.premiumOnly ? 'Demo premium' : 'Demo gruppo'}</div>
+        <h3>${esc(group.name)}</h3>
+        <p>${esc(group.description || '')}</p>
+        <p><strong>Città:</strong> ${esc(group.city || 'Online')}</p>
+        <p><strong>Membri demo:</strong> ${esc(group.memberCount || 0)} / ${esc(group.sizeLimit || 0)}</p>
+        <p>${(group.tags || []).map((tag) => `<span class="tag">${esc(tag)}</span>`).join(' ')}</p>
+      </article>
+      `
+    )
+    .join('');
+}
+
 function renderStats(stats) {
   const node = $('#app-stats');
   if (!node || !stats) return;
@@ -674,7 +702,8 @@ async function loadBootstrap() {
     const payload = await getJson('/api/bootstrap');
     appState.bootstrap = payload;
     renderInsights(payload.insights);
-    renderDemoUsers(payload.marketing);
+renderDemoUsers(payload.marketing);
+renderDemoGroups(payload.marketing);
   } catch (error) {
     showResult('#platform-status', error.message || 'Impossibile caricare il backend.', 'error');
     showResult('#app-status', error.message || 'Impossibile caricare il backend.', 'error');
