@@ -8,9 +8,10 @@
     "node": ">=20"
   },
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js"
-  },
+  "start": "node server.js",
+  "dev": "node server.js",
+  "reset:data": "node scripts/reseed.js"
+}
   "dependencies": {
     "express": "^4.21.2",
     "nodemailer": "^6.10.1",

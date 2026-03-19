@@ -774,6 +774,43 @@ function getMarketing(db) {
       interests: Array.isArray(user.interests) ? user.interests : []
     }));
 
+const DEMO_USER_IDS = new Set([
+  'u-alice',
+  'u-marco',
+  'u-sara',
+  'u-luca'
+]);
+
+const DEMO_GROUP_IDS = new Set([
+  'g-creative-circle',
+  'g-build-club',
+  'g-slow-social',
+  'g-move-together',
+  'g-new-city-club'
+]);
+
+function applyMarketingIsolationMigration(db) {
+  let changed = false;
+
+  db.users = (db.users || []).map((user) => {
+    if (DEMO_USER_IDS.has(user.id) && !user.marketingOnly) {
+      changed = true;
+      return { ...user, marketingOnly: true };
+    }
+    return user;
+  });
+
+  db.groups = (db.groups || []).map((group) => {
+    if (DEMO_GROUP_IDS.has(group.id) && !group.marketingOnly) {
+      changed = true;
+      return { ...group, marketingOnly: true };
+    }
+    return group;
+  });
+
+  return changed;
+}
+
   const demoGroups = db.groups
     .filter((group) => group.marketingOnly)
     .slice(0, 6)
@@ -1143,7 +1180,12 @@ app.get('/api/users/:userId', async (req, res) => {
 app.get('/api/groups', async (req, res) => {
   const db = await readDb();
   const userId = req.query.userId ? String(req.query.userId) : null;
-  res.json(db.groups.map((group) => serializeGroup(db, group, userId)));
+
+  res.json(
+    db.groups
+      .filter((group) => !group.marketingOnly)
+      .map((group) => serializeGroup(db, group, userId))
+  );
 });
 
 app.post('/api/groups/:groupId/join', async (req, res) => {
@@ -1156,6 +1198,10 @@ app.post('/api/groups/:groupId/join', async (req, res) => {
   if (!group || !user) {
     return res.status(404).json({ error: 'Gruppo o profilo non trovato.' });
   }
+
+if (group.marketingOnly) {
+  return res.status(404).json({ error: 'Gruppo non disponibile nell’area riservata.' });
+}
 
   const entitlements = getUserEntitlements(db, user);
 
@@ -1195,6 +1241,10 @@ app.post('/api/groups/:groupId/leave', async (req, res) => {
     return res.status(404).json({ error: 'Gruppo o profilo non trovato.' });
   }
 
+if (group.marketingOnly) {
+  return res.status(404).json({ error: 'Gruppo non disponibile nell’area riservata.' });
+}
+
   group.members = (group.members || []).filter((memberId) => memberId !== userId);
   user.joinedGroupIds = (user.joinedGroupIds || []).filter((id) => id !== group.id);
 
@@ -1216,6 +1266,10 @@ app.post('/api/groups/:groupId/activities/:activityId/rsvp', async (req, res) =>
   if (!group || !user) {
     return res.status(404).json({ error: 'Gruppo o profilo non trovato.' });
   }
+
+if (group.marketingOnly) {
+  return res.status(404).json({ error: 'Gruppo non disponibile nell’area riservata.' });
+}
 
   if (!(group.members || []).includes(userId)) {
     return res.status(409).json({ error: 'Entra prima nel gruppo.' });
@@ -1543,6 +1597,13 @@ app.get('/favicon.ico', (req, res) => {
 async function boot() {
   try {
     await ensureStateRow();
+
+    const db = await readDb();
+    if (applyMarketingIsolationMigration(db)) {
+      await writeDb(db);
+      console.log('Migrazione marketingOnly applicata.');
+    }
+
     app.listen(PORT, HOST, () => {
       console.log(`Inclusio API in ascolto su http://${HOST}:${PORT}`);
     });
