@@ -27,6 +27,10 @@ const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
 const STRIPE_PRICE_PLUS_MONTHLY = process.env.STRIPE_PRICE_PLUS_MONTHLY || '';
 const STRIPE_PRICE_PLUS_ANNUAL = process.env.STRIPE_PRICE_PLUS_ANNUAL || '';
+const STRIPE_PRICE_SCHOOL_STARTER_YEARLY = process.env.STRIPE_PRICE_SCHOOL_STARTER_YEARLY || '';
+const STRIPE_PRICE_SCHOOL_PRO_YEARLY = process.env.STRIPE_PRICE_SCHOOL_PRO_YEARLY || '';
+const STRIPE_SUCCESS_URL = process.env.STRIPE_SUCCESS_URL || '';
+const STRIPE_CANCEL_URL = process.env.STRIPE_CANCEL_URL || '';
 
 const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 
@@ -545,6 +549,8 @@ function normalizePlanCode(value) {
 
   if (['plus', 'plus_monthly', 'monthly', 'mensile'].includes(code)) return 'plus_monthly';
   if (['plus_annual', 'annual', 'annuale'].includes(code)) return 'plus_annual';
+  if (['school_starter', 'starter', 'school', 'school_start'].includes(code)) return 'school_starter';
+  if (['school_pro', 'pro', 'scuola_pro'].includes(code)) return 'school_pro';
 
   return 'solo';
 }
@@ -554,27 +560,124 @@ function getPlanLabel(planCode = 'solo') {
 
   if (normalized === 'plus_annual') return 'Plus Annuale';
   if (normalized === 'plus_monthly') return 'Plus Mensile';
+  if (normalized === 'school_starter') return 'School Starter';
+  if (normalized === 'school_pro') return 'School Pro';
 
   return 'Solo';
 }
 
 function getPlanEntitlements(planCode = 'solo') {
   const normalized = normalizePlanCode(planCode);
-  const isPaid = normalized === 'plus_monthly' || normalized === 'plus_annual';
+
+  if (normalized === 'plus_monthly' || normalized === 'plus_annual') {
+    return {
+      planCode: normalized,
+      planLabel: getPlanLabel(normalized),
+      isPaid: true,
+      maxGroups: 3,
+      buddyMatches: 3,
+      premiumGroups: true,
+      premiumActivities: true,
+      advancedInsights: true,
+      priorityIntroductions: true,
+      supportLevel: 'priority',
+      orgDashboard: false,
+      reportExports: false
+    };
+  }
+
+  if (normalized === 'school_starter') {
+    return {
+      planCode: normalized,
+      planLabel: getPlanLabel(normalized),
+      isPaid: true,
+      maxGroups: 20,
+      buddyMatches: 10,
+      premiumGroups: true,
+      premiumActivities: true,
+      advancedInsights: true,
+      priorityIntroductions: true,
+      supportLevel: 'school',
+      orgDashboard: true,
+      reportExports: false
+    };
+  }
+
+  if (normalized === 'school_pro') {
+    return {
+      planCode: normalized,
+      planLabel: getPlanLabel(normalized),
+      isPaid: true,
+      maxGroups: 50,
+      buddyMatches: 25,
+      premiumGroups: true,
+      premiumActivities: true,
+      advancedInsights: true,
+      priorityIntroductions: true,
+      supportLevel: 'enterprise',
+      orgDashboard: true,
+      reportExports: true
+    };
+  }
 
   return {
-    planCode: normalized,
-    planLabel: getPlanLabel(normalized),
-    isPaid,
-    maxGroups: isPaid ? 3 : 1,
-    buddyMatches: isPaid ? 3 : 1,
-    premiumGroups: isPaid,
-    premiumActivities: isPaid,
-    advancedInsights: isPaid,
-    priorityIntroductions: isPaid,
-    supportLevel: isPaid ? 'priority' : 'base',
-    orgDashboard: false
+    planCode: 'solo',
+    planLabel: 'Solo',
+    isPaid: false,
+    maxGroups: 1,
+    buddyMatches: 1,
+    premiumGroups: false,
+    premiumActivities: false,
+    advancedInsights: false,
+    priorityIntroductions: false,
+    supportLevel: 'base',
+    orgDashboard: false,
+    reportExports: false
   };
+}
+
+function getActiveSubscriptionByEmail(db, emailValue) {
+  const normalizedEmail = email(emailValue);
+  if (!normalizedEmail || !Array.isArray(db.subscriptions)) return null;
+
+  return (
+    db.subscriptions.find((subscription) => {
+      if (email(subscription.email) !== normalizedEmail) return false;
+      if (String(subscription.status || '').toLowerCase() !== 'active') return false;
+      return normalizePlanCode(subscription.planCode || subscription.plan) !== 'solo';
+    }) || null
+  );
+}
+
+function getPlanCodeForEmail(db, emailValue) {
+  const activeSubscription = getActiveSubscriptionByEmail(db, emailValue);
+  return activeSubscription ? normalizePlanCode(activeSubscription.planCode || activeSubscription.plan) : 'solo';
+}
+
+function resolveStripePlanCode(metadataPlanCode = '', priceId = '') {
+  const normalizedMetadataPlan = normalizePlanCode(metadataPlanCode);
+
+  if (normalizedMetadataPlan !== 'solo') {
+    return normalizedMetadataPlan;
+  }
+
+  if (priceId && STRIPE_PRICE_PLUS_MONTHLY && priceId === STRIPE_PRICE_PLUS_MONTHLY) {
+    return 'plus_monthly';
+  }
+
+  if (priceId && STRIPE_PRICE_PLUS_ANNUAL && priceId === STRIPE_PRICE_PLUS_ANNUAL) {
+    return 'plus_annual';
+  }
+
+  if (priceId && STRIPE_PRICE_SCHOOL_STARTER_YEARLY && priceId === STRIPE_PRICE_SCHOOL_STARTER_YEARLY) {
+    return 'school_starter';
+  }
+
+  if (priceId && STRIPE_PRICE_SCHOOL_PRO_YEARLY && priceId === STRIPE_PRICE_SCHOOL_PRO_YEARLY) {
+    return 'school_pro';
+  }
+
+  return 'solo';
 }
 
 function getActiveSubscriptionByEmail(db, emailValue) {
@@ -623,6 +726,89 @@ async function getStripeCustomerEmail(customerId = '') {
     console.error('Stripe customer retrieve failed:', error.message);
     return '';
   }
+}
+
+function getStripeCheckoutUrls() {
+  const baseUrl = String(APP_BASE_URL || '').replace(/\/$/, '');
+  const successUrl =
+    STRIPE_SUCCESS_URL ||
+    (baseUrl ? `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}` : '');
+  const cancelUrl =
+    STRIPE_CANCEL_URL ||
+    (baseUrl ? `${baseUrl}/cancel` : '');
+
+  return { successUrl, cancelUrl };
+}
+
+function getStripePriceIdForPlan(planCode = '') {
+  const normalized = normalizePlanCode(planCode);
+
+  if (normalized === 'plus_monthly') return STRIPE_PRICE_PLUS_MONTHLY;
+  if (normalized === 'plus_annual') return STRIPE_PRICE_PLUS_ANNUAL;
+  if (normalized === 'school_starter') return STRIPE_PRICE_SCHOOL_STARTER_YEARLY;
+  if (normalized === 'school_pro') return STRIPE_PRICE_SCHOOL_PRO_YEARLY;
+
+  return '';
+}
+
+function ensureStripeCheckoutReady(res, planCode = '') {
+  if (!stripe) {
+    res.status(503).json({ error: 'Stripe non configurato sul backend.' });
+    return null;
+  }
+
+  const priceId = getStripePriceIdForPlan(planCode);
+  if (!priceId) {
+    res.status(503).json({ error: `Prezzo Stripe non configurato per il piano ${planCode}.` });
+    return null;
+  }
+
+  const { successUrl, cancelUrl } = getStripeCheckoutUrls();
+  if (!successUrl || !cancelUrl) {
+    res.status(503).json({ error: 'URL di ritorno Stripe non configurati.' });
+    return null;
+  }
+
+  return { priceId, successUrl, cancelUrl };
+}
+
+async function createStripeCheckoutSession({
+  planCode,
+  billingEmail,
+  contactName = '',
+  organization = '',
+  schoolSize = ''
+}) {
+  const normalizedPlanCode = normalizePlanCode(planCode);
+  const priceId = getStripePriceIdForPlan(normalizedPlanCode);
+  const { successUrl, cancelUrl } = getStripeCheckoutUrls();
+
+  const metadata = {
+    email: email(billingEmail),
+    planCode: normalizedPlanCode,
+    contactName: text(contactName, 60),
+    organization: text(organization, 80),
+    schoolSize: text(schoolSize, 60)
+  };
+
+  return stripe.checkout.sessions.create({
+    mode: 'subscription',
+    customer_email: email(billingEmail),
+    billing_address_collection: 'auto',
+    allow_promotion_codes: true,
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+    line_items: [
+      {
+        price: priceId,
+        quantity: 1
+      }
+    ],
+    metadata,
+    subscription_data: {
+      metadata
+    }
+  });
 }
 
 function upsertSubscriptionForEmail(
@@ -1748,6 +1934,82 @@ app.post('/api/waitlist', async (req, res) => {
     ok: true,
     message: 'Iscrizione completata. Ti aggiorneremo presto.'
   });
+});
+
+app.post('/api/billing/plus-checkout', async (req, res) => {
+  const billingEmail = email(req.body.billingEmail);
+  const contactName = text(req.body.contactName, 60);
+  const planCode = normalizePlanCode(req.body.planCode);
+
+  if (!['plus_monthly', 'plus_annual'].includes(planCode)) {
+    return res.status(400).json({ error: 'Piano Plus non valido.' });
+  }
+
+  if (!isValidEmail(billingEmail)) {
+    return res.status(400).json({ error: 'Inserisci una email valida.' });
+  }
+
+  const stripeConfig = ensureStripeCheckoutReady(res, planCode);
+  if (!stripeConfig) return;
+
+  try {
+    const session = await createStripeCheckoutSession({
+      planCode,
+      billingEmail,
+      contactName
+    });
+
+    return res.status(201).json({
+      ok: true,
+      url: session.url,
+      sessionId: session.id
+    });
+  } catch (error) {
+    console.error('Stripe plus checkout failed:', error.message);
+    return res.status(500).json({ error: 'Impossibile creare il checkout Plus.' });
+  }
+});
+
+app.post('/api/billing/school-checkout', async (req, res) => {
+  const billingEmail = email(req.body.billingEmail);
+  const contactName = text(req.body.contactName, 60);
+  const organization = text(req.body.organization, 80);
+  const schoolSize = text(req.body.schoolSize, 60);
+  const planCode = normalizePlanCode(req.body.planCode);
+
+  if (!['school_starter', 'school_pro'].includes(planCode)) {
+    return res.status(400).json({ error: 'Piano scuola non valido.' });
+  }
+
+  if (!organization) {
+    return res.status(400).json({ error: 'Inserisci il nome della scuola o organizzazione.' });
+  }
+
+  if (!isValidEmail(billingEmail)) {
+    return res.status(400).json({ error: 'Inserisci una email valida.' });
+  }
+
+  const stripeConfig = ensureStripeCheckoutReady(res, planCode);
+  if (!stripeConfig) return;
+
+  try {
+    const session = await createStripeCheckoutSession({
+      planCode,
+      billingEmail,
+      contactName,
+      organization,
+      schoolSize
+    });
+
+    return res.status(201).json({
+      ok: true,
+      url: session.url,
+      sessionId: session.id
+    });
+  } catch (error) {
+    console.error('Stripe school checkout failed:', error.message);
+    return res.status(500).json({ error: 'Impossibile creare il checkout Scuola.' });
+  }
 });
 
 app.post('/api/partner-leads', async (req, res) => {
