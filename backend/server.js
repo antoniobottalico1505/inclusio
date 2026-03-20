@@ -740,6 +740,21 @@ function getStripeCheckoutUrls() {
   return { successUrl, cancelUrl };
 }
 
+function isStripeHostedLink(value = '') {
+  return /^https:\/\/(buy\.stripe\.com|checkout\.stripe\.com)\//i.test(String(value || '').trim());
+}
+
+function buildStripeHostedLink(rawUrl, billingEmail = '') {
+  const url = new URL(String(rawUrl || '').trim());
+
+  if (billingEmail) {
+    url.searchParams.set('locked_prefilled_email', billingEmail);
+  }
+
+  url.searchParams.set('locale', 'it');
+  return url.toString();
+}
+
 function getStripePriceIdForPlan(planCode = '') {
   const normalized = normalizePlanCode(planCode);
 
@@ -751,15 +766,32 @@ function getStripePriceIdForPlan(planCode = '') {
   return '';
 }
 
+function getStripeCheckoutUrls() {
+  const baseUrl = String(APP_BASE_URL || '').replace(/\/$/, '');
+  const successUrl =
+    STRIPE_SUCCESS_URL ||
+    (baseUrl ? `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}` : '');
+  const cancelUrl =
+    STRIPE_CANCEL_URL ||
+    (baseUrl ? `${baseUrl}/cancel` : '');
+
+  return { successUrl, cancelUrl };
+}
+
 function ensureStripeCheckoutReady(res, planCode = '') {
-  if (!stripe) {
-    res.status(503).json({ error: 'Stripe non configurato sul backend.' });
+  const priceOrLink = getStripePriceIdForPlan(planCode);
+
+  if (!priceOrLink) {
+    res.status(503).json({ error: `Prezzo o link Stripe non configurato per il piano ${planCode}.` });
     return null;
   }
 
-  const priceId = getStripePriceIdForPlan(planCode);
-  if (!priceId) {
-    res.status(503).json({ error: `Prezzo Stripe non configurato per il piano ${planCode}.` });
+  if (isStripeHostedLink(priceOrLink)) {
+    return { mode: 'payment_link', value: priceOrLink };
+  }
+
+  if (!stripe) {
+    res.status(503).json({ error: 'Stripe non configurato sul backend.' });
     return null;
   }
 
@@ -769,7 +801,12 @@ function ensureStripeCheckoutReady(res, planCode = '') {
     return null;
   }
 
-  return { priceId, successUrl, cancelUrl };
+  return {
+    mode: 'checkout_session',
+    value: priceOrLink,
+    successUrl,
+    cancelUrl
+  };
 }
 
 async function createStripeCheckoutSession({
@@ -1952,6 +1989,13 @@ app.post('/api/billing/plus-checkout', async (req, res) => {
   const stripeConfig = ensureStripeCheckoutReady(res, planCode);
   if (!stripeConfig) return;
 
+if (stripeConfig.mode === 'payment_link') {
+  return res.status(201).json({
+    ok: true,
+    url: buildStripeHostedLink(stripeConfig.value, billingEmail)
+  });
+}
+
   try {
     const session = await createStripeCheckoutSession({
       planCode,
@@ -1991,6 +2035,13 @@ app.post('/api/billing/school-checkout', async (req, res) => {
 
   const stripeConfig = ensureStripeCheckoutReady(res, planCode);
   if (!stripeConfig) return;
+
+if (stripeConfig.mode === 'payment_link') {
+  return res.status(201).json({
+    ok: true,
+    url: buildStripeHostedLink(stripeConfig.value, billingEmail)
+  });
+}
 
   try {
     const session = await createStripeCheckoutSession({
