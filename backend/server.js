@@ -167,12 +167,41 @@ const allowedOrigins = (process.env.CORS_ORIGIN || '')
   .map((item) => item.trim())
   .filter(Boolean);
 
+function isAllowedCorsOrigin(origin = '') {
+  if (!origin) return true;
+
+  if (!allowedOrigins.length || allowedOrigins.includes('*')) {
+    return true;
+  }
+
+  if (allowedOrigins.includes(origin)) {
+    return true;
+  }
+
+  try {
+    const { hostname, protocol } = new URL(origin);
+
+    if (protocol === 'https:' && hostname.endsWith('.vercel.app')) {
+      return true;
+    }
+
+    if (
+      (hostname === 'localhost' || hostname === '127.0.0.1') &&
+      (protocol === 'http:' || protocol === 'https:')
+    ) {
+      return true;
+    }
+  } catch {}
+
+  return false;
+}
+
 app.use((req, res, next) => {
   const origin = req.headers.origin;
 
   if (!origin) {
     res.setHeader('Access-Control-Allow-Origin', '*');
-  } else if (!allowedOrigins.length || allowedOrigins.includes(origin)) {
+  } else if (isAllowedCorsOrigin(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Vary', 'Origin');
   }
